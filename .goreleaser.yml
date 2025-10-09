@@ -1,0 +1,45 @@
+project_name: cec-controller
+
+builds:
+  - main: ./main.go
+    goos: [linux]
+    goarch: [amd64, arm64]
+    ldflags: -s -w
+    binary: cec-controller
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+nfpms:
+  - id: deb
+    packager: deb
+    description: "CEC Controller Service"
+    maintainer: "eliottness"
+    homepage: "https://github.com/eliottness/cec-controller"
+    license: "GLPv3"
+    formats: [deb]
+    vendor: "eliottness"
+    section: "utils"
+    priority: "optional"
+    bindir: "/usr/bin"
+    files:
+      ./cec-controller.service: /lib/systemd/system/cec-controller.service
+  - id: rpm
+    packager: rpm
+    description: "CEC Controller Service"
+    maintainer: "eliottness"
+    homepage: "https://github.com/eliottness/cec-controller"
+    license: "GLPv3"
+    formats: [rpm]
+    vendor: "eliottness"
+    bindir: "/usr/bin"
+    files:
+      ./cec-controller.service: /lib/systemd/system/cec-controller.service
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

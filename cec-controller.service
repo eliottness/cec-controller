@@ -5,7 +5,7 @@ DefaultDependencies=no
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cec-controller
+ExecStart=/usr/bin/cec-controller
 Restart=on-failure
 
 [Install]

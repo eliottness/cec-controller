@@ -5,26 +5,28 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
-	"time"
+	"syscall"
 
-	keybd "github.com/micmonay/keybd_event"
-	"github.com/chbmuc/cec"
+	"github.com/claes/cec"
 )
 
 type Config struct {
 	CECAdapter      string
 	Debug           bool
 	KeyMapOverrides map[int]int
+	NoPowerEvents   bool
+	PowerDevices    []int
 }
 
 type multiFlag []string
 
-func (m *multiFlag) String() string        { return strings.Join(*m, ",") }
+func (m *multiFlag) String() string         { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(value string) error { *m = append(*m, value); return nil }
 
-func ParseKeyMapFlags(keyMapArgs []string) map[int]int {
+func parseKeyMapFlags(keyMapArgs []string) map[int]int {
 	m := make(map[int]int)
 	for _, entry := range keyMapArgs {
 		parts := strings.Split(entry, ":")
@@ -43,15 +45,43 @@ func ParseKeyMapFlags(keyMapArgs []string) map[int]int {
 	return m
 }
 
-func ParseFlags() *Config {
+func parseFlags() *Config {
 	var keyMapArgs multiFlag
+	var powerDevices multiFlag
 	cfg := &Config{}
 	flag.StringVar(&cfg.CECAdapter, "cec-adapter", "", "CEC adapter path (leave empty for auto-detect)")
 	flag.BoolVar(&cfg.Debug, "debug", false, "Enable debug output")
+	flag.BoolVar(&cfg.NoPowerEvents, "no-power-events", false, "Disable power event handling")
 	flag.Var(&keyMapArgs, "keymap", "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
+	flag.Var(&powerDevices, "devices", "Power event device addresses (e.g. --devices 0,1). Default to 0")
 	flag.Parse()
-	cfg.KeyMapOverrides = ParseKeyMapFlags(keyMapArgs)
+	cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
+	cfg.PowerDevices = parseDevices(powerDevices)
+	cfg.NoPowerEvents = cfg.NoPowerEvents || len(cfg.PowerDevices) == 0
 	return cfg
+}
+
+func parseDevices(devices []string) []int {
+	if len(devices) == 0 {
+		return []int{0} // Default to device 0
+	}
+	var result []int
+	for _, devStr := range devices {
+		parts := strings.Split(devStr, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			dev, err := strconv.Atoi(part)
+			if err != nil {
+				slog.Warn("Invalid device address", "device", part, "error", err)
+				continue
+			}
+			result = append(result, dev)
+		}
+	}
+	return result
 }
 
 func setupLogger(debug bool) {
@@ -66,7 +96,7 @@ func setupLogger(debug bool) {
 }
 
 func main() {
-	cfg := ParseFlags()
+	cfg := parseFlags()
 	setupLogger(cfg.Debug)
 
 	slog.Info("Starting cec-controller", "config", cfg)
@@ -87,37 +117,19 @@ func main() {
 
 	c.KeyPresses = make(chan *cec.KeyPress, 10)
 
-	// --- Power Events Integration ---
-	events := make(chan PowerEvent, 8)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	// Send startup event
-	events <- PowerEvent{Type: PowerStartup, Active: true}
+	events := make(chan PowerEvent, 8)
+	events <- PowerEvent{Type: PowerOn, Active: true}
 
-	if err := PowerEventListener(ctx, events); err != nil {
-		slog.Error("Failed to start power event listener", "error", err)
-		os.Exit(1)
-	}
-
-	go func() {
-		for ev := range events {
-			switch ev.Type {
-			case PowerStartup:
-				slog.Info("System startup event")
-				// Add your startup hook logic here
-			case PowerSleep:
-				slog.Info("System is going to sleep")
-				// Add your sleep hook logic here
-			case PowerResume:
-				slog.Info("System has resumed")
-				// Add your resume hook logic here
-			case PowerShutdown:
-				slog.Info("System is shutting down")
-				// Add your shutdown hook logic here
-			}
+	if !cfg.NoPowerEvents {
+		if err := PowerEventListener(ctx, events); err != nil {
+			slog.Error("Failed to start power event listener", "error", err)
+			os.Exit(1)
 		}
-	}()
+	}
 
 	slog.Info("Listening for CEC key events... (Ctrl+C to exit)")
 	for {
@@ -125,8 +137,26 @@ func main() {
 		case kp := <-c.KeyPresses:
 			slog.Info("CEC Key pressed", "code", kp.KeyCode, "duration_ms", kp.Duration)
 			keyMapObj.OnKeyPress(kp.KeyCode)
-		case <-time.After(5 * time.Second):
-			slog.Debug("No key event...")
+		case ev := <-events:
+			switch ev.Type {
+			case PowerOn, PowerResume:
+				for _, dev := range cfg.PowerDevices {
+					slog.Info("Sending CEC power on to device", "device", dev)
+					if err := c.PowerOn(dev); err != nil {
+						slog.Error("Failed to send PowerOn", "device", dev, "error", err)
+					}
+				}
+			case PowerSleep, PowerShutdown:
+				for _, dev := range cfg.PowerDevices {
+					slog.Info("Sending CEC standby to device", "device", dev)
+					if err := c.Standby(dev); err != nil {
+						slog.Error("Failed to send Standby", "device", dev, "error", err)
+					}
+				}
+			}
+		case <-ctx.Done():
+			slog.Info("Shutting down...")
+			return
 		}
 	}
 }

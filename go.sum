@@ -1,0 +1,6 @@
+github.com/claes/cec v0.0.0-20240820185959-6db0712de894 h1:cZOiacVo+F8/VV+dEfqzNoqzbZVWiPbEDZ6rCKPK9uo=
+github.com/claes/cec v0.0.0-20240820185959-6db0712de894/go.mod h1:7MHv0D7vkFEFjZDDfdT4qnnJnKtB5VyN7gy5uRBfafw=
+github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
+github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
+github.com/micmonay/keybd_event v1.1.2 h1:RpgvPJKOh4Jc+ZYe0OrVzGd2eNMCfuVg3dFTCsuSah4=
+github.com/micmonay/keybd_event v1.1.2/go.mod h1:CGMWMDNgsfPljzrAWoybUOSKafQPZpv+rLigt2LzNGI=

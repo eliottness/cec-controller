@@ -3,10 +3,23 @@ package main
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/godbus/dbus/v5"
 )
+
+type PowerEventType int
+
+const (
+	PowerOn PowerEventType = iota
+	PowerSleep
+	PowerResume
+	PowerShutdown
+)
+
+type PowerEvent struct {
+	Type   PowerEventType
+	Active bool // true if the event is starting (e.g., going to sleep), false if ending (e.g., resuming)
+}
 
 // PowerEventListener subscribes to systemd-logind D-Bus signals and sends events on the channel.
 func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
@@ -46,10 +59,10 @@ func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
 						evType = PowerSleep
 					}
 					events <- PowerEvent{Type: evType, Active: active}
-					slog.Info("Power event", "type", evType, "active", active)
+					slog.Debug("Power event", "type", evType, "active", active)
 				case "org.freedesktop.login1.Manager.PrepareForShutdown":
 					events <- PowerEvent{Type: PowerShutdown, Active: active}
-					slog.Info("Power event", "type", PowerShutdown, "active", active)
+					slog.Debug("Power event", "type", PowerShutdown, "active", active)
 				}
 			case <-ctx.Done():
 				return

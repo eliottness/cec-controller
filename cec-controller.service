@@ -1,0 +1,12 @@
+[Unit]
+Description=CEC Controller CLI Service
+After=local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cec-controller
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

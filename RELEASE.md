@@ -12,19 +12,22 @@ The project uses GitHub Actions workflows to automate building, testing, and rel
 
 ### 1. Build and Test Workflow (`build.yml`)
 
-**Trigger:** Push to `main` branch or pull request to `main`
+**Trigger:** Push to `main` branch
 
-**Purpose:** Continuous integration for testing and building on every push
+**Purpose:** Quick CI validation for main branch commits
 
 **Steps:**
 1. Run tests on Ubuntu with libcec installed
 2. Build Ubuntu amd64 and arm64 binaries (using cross-compilation for arm64)
 3. Upload build artifacts
 
+**Note:** For pull requests, the full release workflow runs in dry-run mode instead, which provides more comprehensive validation.
+
 ### 2. Release Workflow (`release.yml`)
 
 **Triggers:** 
 - Automatic: Push of a semver-compliant git tag (e.g., `v1.0.0`, `v2.1.3`)
+- Pull Request: Automatically runs in dry-run mode on PRs to `main`
 - Manual: Workflow dispatch with optional dry-run mode
 
 **Purpose:** Full build, test, and release pipeline
@@ -89,9 +92,20 @@ To create a new release:
    - Create packages
    - Publish a GitHub Release
 
+### Automatic Dry Run on Pull Requests
+
+The release workflow automatically runs in dry-run mode for all pull requests to `main`. This:
+- Validates that the full release pipeline works
+- Tests builds for all 4 platforms (Ubuntu amd64/arm64, Fedora amd64/arm64)
+- Creates all packages (.deb and .rpm files)
+- Uploads packages as workflow artifacts for inspection
+- Does NOT publish a release
+
+This ensures that any changes to the build process or dependencies are validated before merging.
+
 ### Manual Dry Run (Testing)
 
-To test the release process without publishing:
+To test the release process manually without publishing:
 
 1. Go to the Actions tab in GitHub
 2. Select "Build, Test and Release" workflow

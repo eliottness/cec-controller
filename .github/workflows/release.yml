@@ -114,7 +114,7 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
             fedora:latest bash -c "
-              dnf install -y golang libcec-devel gcc-aarch64-linux-gnu make git && \
+              dnf install -y golang libcec-devel aarch64-linux-gnu-gcc make git && \
               mkdir -p dist/fedora-arm64_linux_arm64 && \
               CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -buildvcs=false -ldflags='-s -w' -o dist/fedora-arm64_linux_arm64/cec-controller .
             "

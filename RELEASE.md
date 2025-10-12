@@ -23,7 +23,9 @@ The project uses GitHub Actions workflows to automate building, testing, and rel
 
 ### 2. Release Workflow (`release.yml`)
 
-**Trigger:** Push of a semver-compliant git tag (e.g., `v1.0.0`, `v2.1.3`)
+**Triggers:** 
+- Automatic: Push of a semver-compliant git tag (e.g., `v1.0.0`, `v2.1.3`)
+- Manual: Workflow dispatch with optional dry-run mode
 
 **Purpose:** Full build, test, and release pipeline
 
@@ -71,6 +73,8 @@ Each release includes:
 
 ## Creating a Release
 
+### Automatic Release (Production)
+
 To create a new release:
 
 1. Ensure all changes are committed and pushed to `main`
@@ -84,6 +88,26 @@ To create a new release:
    - Build binaries for all platforms
    - Create packages
    - Publish a GitHub Release
+
+### Manual Dry Run (Testing)
+
+To test the release process without publishing:
+
+1. Go to the Actions tab in GitHub
+2. Select "Build, Test and Release" workflow
+3. Click "Run workflow"
+4. Keep "Dry run mode" checked (default: true)
+5. Select the branch you want to test
+6. Click "Run workflow"
+
+The workflow will:
+- Run all tests
+- Build binaries for all platforms
+- Create packages
+- Upload packages as workflow artifacts (not published as a release)
+
+To perform an actual release manually:
+- Uncheck the "Dry run mode" option when running the workflow
 
 ## Technical Details
 

@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (builds and packages but does not publish release)'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   test:
@@ -151,10 +158,29 @@ jobs:
           echo "Contents of dist directory:"
           find dist -type f -ls
 
-      - name: Run GoReleaser for packaging
+      - name: Run GoReleaser (Dry Run)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --snapshot --skip=build,validate --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser (Release)
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
           args: release --skip=build,validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dry-run artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm

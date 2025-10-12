@@ -21,10 +21,10 @@ jobs:
       run: |
         go test -v ./...
         mkdir -p dist
-        GOOS=linux GOARCH=amd64 go build -o dist/cec-controller-amd64 main.go
+        GOOS=linux GOARCH=amd64 go build -o dist/cec-controller-amd64 .
     - name: Build Linux arm64 Binary
       run: |
-        GOOS=linux GOARCH=arm64 go build -o dist/cec-controller-arm64 main.go
+        GOOS=linux GOARCH=arm64 go build -o dist/cec-controller-arm64 .
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:

@@ -32,6 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcec-dev libp8-platform-dev
 
+      - name: Run tests
+        run: CGO_ENABLED=1 go test -v ./...
+
   release:
     name: build binaries
     needs: test
@@ -48,17 +51,9 @@ jobs:
             go-version: stable
 
       - name: install dependencies
-        run: |
-          dpkg --add-architecture arm64
-          
+        run: | 
           apt update
           apt install -y --no-install-recommends libcec-dev libp8-platform-dev libudev-dev gcc
-        
-          apt install -y --no-install-recommends gcc-multilib
-          apt install -y --no-install-recommends gcc-aarch64-linux-gnu libcec-dev:arm64 libp8-platform-dev:arm64 libudev-dev:arm64
-
-      - name: Run tests
-        run: CGO_ENABLED=1 go test -v ./...
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
@@ -66,7 +61,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --snapshot
+          args: release --snapshot --skip-publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

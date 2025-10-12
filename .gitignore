@@ -1,3 +1,7 @@
 cec-controller
 coverage.out
 *.test
+dist/
+*.deb
+*.rpm
+pkg-*

@@ -57,7 +57,7 @@ func TestPowerEvent_Structure(t *testing.T) {
 		Type:   PowerSleep,
 		Active: true,
 	}
-	
+
 	if event.Type != PowerSleep {
 		t.Errorf("Expected Type to be PowerSleep, got %d", event.Type)
 	}
@@ -95,7 +95,7 @@ func MockPowerEventListener(ctx context.Context, events chan<- PowerEvent, signa
 			}
 		}
 	}()
-	
+
 	return nil
 }
 

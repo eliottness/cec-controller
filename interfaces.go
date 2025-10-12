@@ -11,19 +11,11 @@ type CECConnection interface {
 
 // CECConnectionWrapper wraps the real CEC connection
 type CECConnectionWrapper struct {
-	conn *cec.Connection
+	*cec.Connection
 }
 
-func (w *CECConnectionWrapper) PowerOn(address int) error {
-	return w.conn.PowerOn(address)
-}
-
-func (w *CECConnectionWrapper) Standby(address int) error {
-	return w.conn.Standby(address)
-}
-
-func (w *CECConnectionWrapper) Close() {
-	w.conn.Close()
+func (w *CECConnectionWrapper) SetKeyPressesChan(ch chan *cec.KeyPress) {
+	w.Connection.KeyPresses = ch
 }
 
 // DBusConnection interface abstracts D-Bus connection for testing

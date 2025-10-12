@@ -8,21 +8,13 @@ import (
 	"time"
 )
 
-func TestQueueStructure(t *testing.T) {
-	// Test that Queue structure has proper channels
-	// We can't instantiate without the real implementation
-	// but we can test the types exist
-	var _ PowerEvent
-	var _ queueItem
-}
-
 func TestPowerEventChannel(t *testing.T) {
 	// Test power event channel operations
 	ch := make(chan PowerEvent, 10)
-	
+
 	testEvent := PowerEvent{Type: PowerSleep, Active: true}
 	ch <- testEvent
-	
+
 	receivedEvent := <-ch
 	if receivedEvent.Type != testEvent.Type {
 		t.Errorf("Expected event type %d, got %d", testEvent.Type, receivedEvent.Type)
@@ -35,19 +27,19 @@ func TestPowerEventChannel(t *testing.T) {
 func TestMultiplePowerEvents(t *testing.T) {
 	// Test multiple power events through channel
 	ch := make(chan PowerEvent, 10)
-	
+
 	events := []PowerEvent{
 		{Type: PowerOn, Active: true},
 		{Type: PowerSleep, Active: true},
 		{Type: PowerResume, Active: false},
 		{Type: PowerShutdown, Active: true},
 	}
-	
+
 	// Send all events
 	for _, event := range events {
 		ch <- event
 	}
-	
+
 	// Receive and verify all events
 	for i, expected := range events {
 		received := <-ch
@@ -66,7 +58,7 @@ func TestQueueItemSerialization(t *testing.T) {
 		Type: "power",
 		Data: []byte(`{"Type":1,"Active":true}`),
 	}
-	
+
 	if item.Type != "power" {
 		t.Errorf("Expected type 'power', got '%s'", item.Type)
 	}
@@ -78,12 +70,12 @@ func TestQueueItemSerialization(t *testing.T) {
 func TestChannelBuffering(t *testing.T) {
 	// Test that channels can buffer multiple events
 	powerCh := make(chan PowerEvent, 10)
-	
+
 	// Fill buffer partially
 	for i := 0; i < 5; i++ {
 		powerCh <- PowerEvent{Type: PowerOn, Active: true}
 	}
-	
+
 	// Verify we can still send more
 	select {
 	case powerCh <- PowerEvent{Type: PowerSleep, Active: true}:
@@ -91,14 +83,14 @@ func TestChannelBuffering(t *testing.T) {
 	default:
 		t.Error("Channel should not be full after 6 events")
 	}
-	
+
 	// Drain channel
 	count := 0
 	for len(powerCh) > 0 {
 		<-powerCh
 		count++
 	}
-	
+
 	if count != 6 {
 		t.Errorf("Expected to drain 6 events, got %d", count)
 	}
@@ -107,15 +99,15 @@ func TestChannelBuffering(t *testing.T) {
 func TestContextCancellationPattern(t *testing.T) {
 	// Test context cancellation pattern used in queue
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	done := make(chan bool)
 	go func() {
 		<-ctx.Done()
 		done <- true
 	}()
-	
+
 	cancel()
-	
+
 	select {
 	case <-done:
 		// Success
@@ -127,23 +119,23 @@ func TestContextCancellationPattern(t *testing.T) {
 func TestTemporaryDirectory(t *testing.T) {
 	// Test temporary directory creation and cleanup
 	tempDir := filepath.Join(os.TempDir(), "queue-test-temp")
-	
+
 	err := os.MkdirAll(tempDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	
+
 	// Verify directory exists
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		t.Error("Expected directory to exist")
 	}
-	
+
 	// Clean up
 	err = os.RemoveAll(tempDir)
 	if err != nil {
 		t.Errorf("Failed to remove temp directory: %v", err)
 	}
-	
+
 	// Verify directory is removed
 	if _, err := os.Stat(tempDir); !os.IsNotExist(err) {
 		t.Error("Expected directory to be removed")

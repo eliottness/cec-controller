@@ -52,8 +52,8 @@ jobs:
 
       - name: install dependencies
         run: | 
-          apt update
-          apt install -y --no-install-recommends libcec-dev libp8-platform-dev libudev-dev gcc
+          sudo apt update
+          sudo apt install -y --no-install-recommends libcec-dev libp8-platform-dev libudev-dev gcc
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}

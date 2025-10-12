@@ -16,9 +16,10 @@ jobs:
       with:
         go-version: stable
     - name: Install Dependencies
-      run: sudo apt update && apt install -y libcec-dev libp8-platform-dev
-    - name: Build Linux amd64 Binary
+      run: sudo apt update && sudo apt install -y libcec-dev libp8-platform-dev
+    - name: Build and test Linux amd64 Binary
       run: |
+        go test -v ./...
         mkdir -p dist
         GOOS=linux GOARCH=amd64 go build -o dist/cec-controller-amd64 main.go
     - name: Build Linux arm64 Binary

@@ -15,16 +15,17 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: stable
-    - name: Install Dependencies
-      run: sudo apt update && sudo apt install -y libcec-dev libp8-platform-dev build-essential libudev-dev pkg-config
     - name: Build and test Linux amd64 Binary
       run: |
+        sudo apt install -y libcec-dev libp8-platform-dev build-essential libudev-dev pkg-config 
         go test -v ./...
         mkdir -p dist
         CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o dist/cec-controller-amd64 .
-    - name: Build Linux arm64 Binary
-      run: |
-        CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o dist/cec-controller-arm64 .
+#    - name: Build Linux arm64 Binary
+#      run: |
+#        sudo dpkg --add-architecture arm64
+#        sudo apt install crossbuild-essential-arm64
+#        CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o dist/cec-controller-arm64 .
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:

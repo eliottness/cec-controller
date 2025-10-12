@@ -1,0 +1,148 @@
+name: Build, Test and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (builds and packages but does not publish release)'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  test:
+    name: Test on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install libcec for testing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcec-dev libp8-platform-dev
+
+      - name: Run tests
+        run: go test -v ./...
+
+  release-build:
+    name: build binaries
+    needs: test
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            image: golang:trixie
+            os: debian
+            runs-on: ubuntu-latest
+            packages: apt install libcec-dev libp8-platform-dev gcc
+          - arch: arm64
+            image: arm64v8/golang:trixie
+            os: debian
+            runs-on: ubuntu-24.04-arm
+            packages: apt install libcec-dev libp8-platform-dev gcc
+          - arch: amd64
+            image: fedora:43
+            os: fedora
+            runs-on: ubuntu-latest
+            package: dnf install -y golang libcec-devel gcc make git
+          - arch: arm64
+            image: arm64v8/fedora:43
+            os: fedora
+            runs-on: ubuntu-24.04-arm
+            package: dnf install -y golang libcec-devel make git
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+#      - name: Set up QEMU for cross-compilation
+#        uses: docker/setup-qemu-action@v3
+
+      - name: Build Binary
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+            ${{ matrix.image }} bash -c "
+              ${{ matrix.package }} && \
+              git config --add safe.directory /... && \
+              mkdir -p dist/linux-${{ matrix.arch }}-${{ matrix.os }} && \
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -o dist/linux-${{ matrix.arch }}-${{ matrix.os }}/cec-controller .
+            "
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  release:
+    name: Create Release with GoReleaser
+    needs: release-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Download Ubuntu binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: List dist contents
+        run: |
+          echo "Contents of dist directory:"
+          find dist -type f -ls
+
+      - name: Run GoReleaser (Dry Run)
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --snapshot --skip=build,validate --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser (Release)
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --skip=build,validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dry-run artifacts
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm

@@ -17,13 +17,33 @@ custom key mappings.
 
 ## Installation
 
-### Prerequisites
+### From Release (Recommended)
+
+Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page:
+
+**Ubuntu/Debian:**
+```sh
+# Download and install the .deb package
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_amd64.deb
+sudo dpkg -i cec-controller_<version>_ubuntu_amd64.deb
+```
+
+**Fedora/RHEL:**
+```sh
+# Download and install the .rpm package
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller-<version>-1.<dist>.x86_64.rpm
+sudo dnf install cec-controller-<version>-1.<dist>.x86_64.rpm
+```
+
+### From Source
+
+#### Prerequisites
 
 - Go 1.24+
 - [libcec](https://libcec.pulse-eight.com/) (`sudo apt install libcec-dev`)
 - Linux with uinput support (for virtual keyboard)
 
-### Build
+#### Build
 
 Requires `libcec-dev` and `libp8-platform-dev` on debian-based systems or just `libcec-devel` on fedora-based systems:
 
@@ -107,6 +127,10 @@ You can customize hooks for these events in your code.
 ## Contributing
 
 PRs and issues are welcome! Please ensure code is formatted (`go fmt`) and tested.
+
+## Releases
+
+This project uses automated CI/CD workflows to build and release binaries for multiple platforms. See [RELEASE.md](RELEASE.md) for details on the release process.
 
 ## License
 

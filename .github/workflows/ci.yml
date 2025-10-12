@@ -105,27 +105,30 @@ jobs:
       - name: Download Ubuntu binaries
         uses: actions/download-artifact@v4
         with:
+          name: dist
           path: dist/
 
       - name: List dist contents
         run: |
           echo "Contents of dist directory:"
-          find -name 'dist*'
+          find dist -type f -ls
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          distribution: goreleaser
+          version: '~> v2'
           args: release --snapshot --skip=build,validate --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run GoReleaser (Release)
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          distribution: goreleaser
+          version: '~> v2'
           args: release --skip=build,validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

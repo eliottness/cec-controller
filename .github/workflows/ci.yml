@@ -56,12 +56,12 @@ jobs:
             image: fedora:43
             distrib: fedora
             runs-on: ubuntu-latest
-            package: dnf install -y golang libcec-devel gcc make git
+            packages: dnf install -y golang libcec-devel gcc make git
           - arch: arm64
             image: arm64v8/fedora:43
             distrib: fedora
             runs-on: ubuntu-24.04-arm
-            package: dnf install -y golang libcec-devel make git
+            packages: dnf install -y golang libcec-devel make git
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
 #        uses: docker/setup-qemu-action@v3
 
       - name: Build Binary
-        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace ${{ matrix.image }} bash -c "${{ matrix.package }} && mkdir -p dist/linux-${{ matrix.arch }}-${{ matrix.distrib }} && CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.arch }} go build -ldflags='-s -w' -buildvcs=false -o dist/linux-${{ matrix.arch }}-${{ matrix.distrib }}/cec-controller ."
+        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace ${{ matrix.image }} bash -c "${{ matrix.packages }} && mkdir -p dist/linux-${{ matrix.arch }}-${{ matrix.distrib }} && CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.arch }} go build -ldflags='-s -w' -buildvcs=false -o dist/linux-${{ matrix.arch }}-${{ matrix.distrib }}/cec-controller ."
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

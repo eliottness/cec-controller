@@ -1,60 +1,22 @@
 version: 2
 project_name: cec-controller
 
-before:
-  hooks:
-    - go mod download
-
 builds:
-  # Ubuntu/Debian builds (amd64 and arm64)
-  - id: ubuntu-amd64
+  - id: amd64
     main: .
     binary: cec-controller
     goos: [linux]
     goarch: [amd64]
     env:
       - CGO_ENABLED=1
-    ldflags: -s -w
-    
-  - id: ubuntu-arm64
-    main: .
-    binary: cec-controller
-    goos: [linux]
-    goarch: [arm64]
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
-      - PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-    ldflags: -s -w
-
-  # Fedora/RHEL builds (amd64 and arm64)
-  # These are built separately in Docker and added to dist/
-  - id: fedora-amd64
-    main: .
-    binary: cec-controller
-    goos: [linux]
-    goarch: [amd64]
-    env:
-      - CGO_ENABLED=1
-    ldflags: -s -w
-
-  - id: fedora-arm64
-    main: .
-    binary: cec-controller
-    goos: [linux]
-    goarch: [arm64]
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
     ldflags: -s -w
 
 nfpms:
   # Ubuntu/Debian packages
   - id: ubuntu-deb
-    builds:
-      - ubuntu-amd64
-      - ubuntu-arm64
-    description: "CEC Controller Service for Ubuntu/Debian"
+    ids:
+      - amd64
+    description: "CEC Controller Service"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
     license: "GPLv3"
@@ -64,12 +26,13 @@ nfpms:
     priority: "optional"
     bindir: "/usr/bin"
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_{{ .Arch }}"
+    dependencies:
+      - libcec7
 
   # Fedora/RHEL packages
   - id: fedora-rpm
-    builds:
-      - fedora-amd64
-      - fedora-arm64
+    ids:
+      - amd64
     description: "CEC Controller Service for Fedora/RHEL"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
@@ -78,10 +41,12 @@ nfpms:
     vendor: "eliottness"
     bindir: "/usr/bin"
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_fedora_{{ .Arch }}"
+    dependencies:
+      - libcec
 
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
+release:
+  github:
+    owner: eliottness
+    name: cec-controller
+  prerelease: auto
+  draft: false

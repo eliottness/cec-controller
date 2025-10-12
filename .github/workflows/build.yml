@@ -17,7 +17,7 @@ jobs:
         go-version: stable
     - name: Build and test Linux amd64 Binary
       run: |
-        sudo apt install -y libcec-dev libp8-platform-dev build-essential libudev-dev pkg-config 
+        sudo apt install -y libcec-dev libp8-platform-dev build-essential
         go test -v ./...
         mkdir -p dist
         CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o dist/cec-controller-amd64 .

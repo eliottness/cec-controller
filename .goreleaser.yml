@@ -1,36 +1,52 @@
-version: 2 
+version: 2
 project_name: cec-controller
 
 builds:
-  - main: .
-    goos: [linux]
-    goarch: [amd64, arm64]
-    ldflags: -s -w
+  - id: amd64
+    main: .
     binary: cec-controller
+    goos: [linux]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
 
 nfpms:
-  - id: deb
+  # Ubuntu/Debian packages
+  - id: ubuntu-deb
+    ids:
+      - amd64
     description: "CEC Controller Service"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
-    license: "GLPv3"
+    license: "GPLv3"
     formats: [deb]
     vendor: "eliottness"
     section: "utils"
     priority: "optional"
     bindir: "/usr/bin"
-  - id: rpm
-    description: "CEC Controller Service"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_{{ .Arch }}"
+    dependencies:
+      - libcec7
+
+  # Fedora/RHEL packages
+  - id: fedora-rpm
+    ids:
+      - amd64
+    description: "CEC Controller Service for Fedora/RHEL"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
-    license: "GLPv3"
+    license: "GPLv3"
     formats: [rpm]
     vendor: "eliottness"
     bindir: "/usr/bin"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_fedora_{{ .Arch }}"
+    dependencies:
+      - libcec
 
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
+release:
+  github:
+    owner: eliottness
+    name: cec-controller
+  prerelease: auto
+  draft: false

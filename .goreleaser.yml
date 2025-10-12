@@ -1,32 +1,83 @@
-version: 2 
+version: 2
 project_name: cec-controller
 
+before:
+  hooks:
+    - go mod download
+
 builds:
-  - main: .
-    goos: [linux]
-    goarch: [amd64, arm64]
-    ldflags: -s -w
+  # Ubuntu/Debian builds (amd64 and arm64)
+  - id: ubuntu-amd64
+    main: .
     binary: cec-controller
+    goos: [linux]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+    
+  - id: ubuntu-arm64
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+      - PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+    ldflags: -s -w
+
+  # Fedora/RHEL builds (amd64 and arm64)
+  # These are built separately in Docker and added to dist/
+  - id: fedora-amd64
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+  - id: fedora-arm64
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    ldflags: -s -w
 
 nfpms:
-  - id: deb
-    description: "CEC Controller Service"
+  # Ubuntu/Debian packages
+  - id: ubuntu-deb
+    builds:
+      - ubuntu-amd64
+      - ubuntu-arm64
+    description: "CEC Controller Service for Ubuntu/Debian"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
-    license: "GLPv3"
+    license: "GPLv3"
     formats: [deb]
     vendor: "eliottness"
     section: "utils"
     priority: "optional"
     bindir: "/usr/bin"
-  - id: rpm
-    description: "CEC Controller Service"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_{{ .Arch }}"
+
+  # Fedora/RHEL packages
+  - id: fedora-rpm
+    builds:
+      - fedora-amd64
+      - fedora-arm64
+    description: "CEC Controller Service for Fedora/RHEL"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
-    license: "GLPv3"
+    license: "GPLv3"
     formats: [rpm]
     vendor: "eliottness"
     bindir: "/usr/bin"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_fedora_{{ .Arch }}"
 
 changelog:
   sort: asc

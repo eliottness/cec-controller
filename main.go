@@ -9,16 +9,17 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-
-	"github.com/claes/cec"
 )
 
 type Config struct {
-	CECAdapter      string
-	Debug           bool
-	KeyMapOverrides map[int]int
-	NoPowerEvents   bool
-	PowerDevices    []int
+	DeviceName        string
+	CECAdapter        string
+	Debug             bool
+	KeyMapOverrides   map[string][]int
+	NoPowerEvents     bool
+	PowerDevices      []int
+	ConnectionRetries int
+	QueueDir          string
 }
 
 type multiFlag []string
@@ -26,39 +27,62 @@ type multiFlag []string
 func (m *multiFlag) String() string         { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(value string) error { *m = append(*m, value); return nil }
 
-func parseKeyMapFlags(keyMapArgs []string) map[int]int {
-	m := make(map[int]int)
+func parseKeyMapFlags(keyMapArgs []string) map[string][]int {
+	m := make(map[string][]int)
 	for _, entry := range keyMapArgs {
 		parts := strings.Split(entry, ":")
 		if len(parts) != 2 {
 			slog.Warn("Invalid keymap entry", "entry", entry)
 			continue
 		}
-		cecCode, err1 := strconv.Atoi(parts[0])
-		linuxCode, err2 := strconv.Atoi(parts[1])
-		if err1 != nil || err2 != nil {
-			slog.Warn("Invalid keymap numbers", "entry", entry)
-			continue
+
+		codes := strings.Split(parts[1], "+")
+		var linuxCodes []int
+		for _, codeStr := range codes {
+			code, err := strconv.Atoi(codeStr)
+			if err != nil {
+				slog.Warn("Invalid linux key code", "code", codeStr, "error", err)
+				continue
+			}
+			linuxCodes = append(linuxCodes, code)
 		}
-		m[cecCode] = linuxCode
+
+		m[parts[0]] = linuxCodes
 	}
 	return m
 }
 
+const queueDirEnvVar = "CEC_QUEUE_DIR"
+
 func parseFlags() *Config {
-	var keyMapArgs multiFlag
-	var powerDevices multiFlag
-	cfg := &Config{}
+	var (
+		keyMapArgs   multiFlag
+		powerDevices multiFlag
+		cfg          Config
+	)
+
 	flag.StringVar(&cfg.CECAdapter, "cec-adapter", "", "CEC adapter path (leave empty for auto-detect)")
+	flag.StringVar(&cfg.DeviceName, "device-name", "", "Device name shown on your TV (leave empty for hostname)")
 	flag.BoolVar(&cfg.Debug, "debug", false, "Enable debug output")
 	flag.BoolVar(&cfg.NoPowerEvents, "no-power-events", false, "Disable power event handling")
+	flag.IntVar(&cfg.ConnectionRetries, "retries", 5, "Number of times to retry CEC connection on failure")
 	flag.Var(&keyMapArgs, "keymap", "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
 	flag.Var(&powerDevices, "devices", "Power event device addresses (e.g. --devices 0,1). Default to 0")
 	flag.Parse()
 	cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
 	cfg.PowerDevices = parseDevices(powerDevices)
 	cfg.NoPowerEvents = cfg.NoPowerEvents || len(cfg.PowerDevices) == 0
-	return cfg
+	if cfg.DeviceName == "" {
+		cfg.DeviceName, _ = os.Hostname()
+	}
+	if cfg.QueueDir = os.Getenv(queueDirEnvVar); cfg.QueueDir == "" {
+		var err error
+		if cfg.QueueDir, err = os.MkdirTemp("", "cec-queue-*"); err != nil {
+			slog.Error("Failed to create temporary queue dir", "error", err)
+			os.Exit(1)
+		}
+	}
+	return &cfg
 }
 
 func parseDevices(devices []string) []int {
@@ -91,7 +115,13 @@ func setupLogger(debug bool) {
 	} else {
 		lvl = slog.LevelInfo
 	}
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
+	// Remove timestamp from logs, it's not very useful since systemd already adds it
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl, ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.TimeKey && len(groups) == 0 {
+			return slog.Attr{}
+		}
+		return a
+	}})
 	slog.SetDefault(slog.New(handler))
 }
 
@@ -101,6 +131,16 @@ func main() {
 
 	slog.Info("Starting cec-controller", "config", cfg)
 
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	queue, err := NewQueue(ctx, cfg.QueueDir)
+	if err != nil {
+		slog.Error("Failed to initialize event queue", "dir", cfg.QueueDir, "error", err)
+		os.Exit(1)
+	}
+	defer queue.Close()
+
 	// Create KeyMap object
 	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides)
 	if err != nil {
@@ -108,51 +148,44 @@ func main() {
 		os.Exit(1)
 	}
 
-	c, err := cec.Open(cfg.CECAdapter, "cec-controller")
+	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents)
 	if err != nil {
 		slog.Error("Failed to open CEC", "error", err)
 		os.Exit(1)
 	}
 	defer c.Close()
 
-	c.KeyPresses = make(chan *cec.KeyPress, 10)
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
-	// Send startup event
-	events := make(chan PowerEvent, 8)
-	events <- PowerEvent{Type: PowerOn, Active: true}
-
 	if !cfg.NoPowerEvents {
-		if err := PowerEventListener(ctx, events); err != nil {
+		// cec-controller just started alongside the system, so we assume the system has to be powered on
+		queue.InPowerEvents <- PowerEvent{Type: PowerOn, Active: true}
+		if err := PowerEventListener(ctx, queue.InPowerEvents); err != nil {
 			slog.Error("Failed to start power event listener", "error", err)
 			os.Exit(1)
 		}
 	}
 
-	slog.Info("Listening for CEC key events... (Ctrl+C to exit)")
+	slog.Info("Listening for CEC key and power events... (Ctrl+C to exit)")
 	for {
 		select {
-		case kp := <-c.KeyPresses:
-			slog.Info("CEC Key pressed", "code", kp.KeyCode, "duration_ms", kp.Duration)
+		case kp := <-queue.OutKeyEvents:
+			if kp == nil || kp.Duration != 0 {
+				// Ignore key release events
+				continue
+			}
 			keyMapObj.OnKeyPress(kp.KeyCode)
-		case ev := <-events:
+		case ev := <-queue.OutPowerEvents:
 			switch ev.Type {
 			case PowerOn, PowerResume:
-				for _, dev := range cfg.PowerDevices {
-					slog.Info("Sending CEC power on to device", "device", dev)
-					if err := c.PowerOn(dev); err != nil {
-						slog.Error("Failed to send PowerOn", "device", dev, "error", err)
-					}
-				}
+				slog.Info("Powering on devices", "devices", cfg.PowerDevices)
+				err = c.PowerOn(cfg.PowerDevices...)
 			case PowerSleep, PowerShutdown:
-				for _, dev := range cfg.PowerDevices {
-					slog.Info("Sending CEC standby to device", "device", dev)
-					if err := c.Standby(dev); err != nil {
-						slog.Error("Failed to send Standby", "device", dev, "error", err)
-					}
-				}
+				slog.Info("Putting devices to standby", "devices", cfg.PowerDevices)
+				err = c.Standby(cfg.PowerDevices...)
+			}
+			if err != nil {
+				slog.Warn("Failed to send power command after connection reopen, libcec is wierd so we need to restart the current process...")
+				cancel()
+				queue.RestartProcess()
 			}
 		case <-ctx.Done():
 			slog.Info("Shutting down...")

@@ -19,17 +19,17 @@ custom key mappings.
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24+
 - [libcec](https://libcec.pulse-eight.com/) (`sudo apt install libcec-dev`)
 - Linux with uinput support (for virtual keyboard)
 
 ### Build
 
+Requires `libcec-dev` and `libp8-platform-dev` on debian-based systems or just `libcec-devel` on fedora-based systems:
+
 ```sh
 go build -o cec-controller main.go
 ```
-
-Or use the provided [GitHub Actions workflow](.github/workflows/release.yml) for automated builds.
 
 ## Usage
 
@@ -47,18 +47,33 @@ Or use the provided [GitHub Actions workflow](.github/workflows/release.yml) for
 
 - `--keymap <cec>:<linux>`  
   Add or override CEC to Linux key mappings (repeat as needed). Example: `--keymap 1:105` maps CEC key `1` to Linux key
-  code `105` (KEY_KP1).
+  code `105` (KEY_KP1). You can also specify modifier keys using `+`, e.g. `--keymap 1:29+105` maps CEC key `1` to Ctrl+KP1.
 
 - `--no-power-events`  
   Disable handling of system power events.
 
 - `--devices`  
-  List available CEC adapters and exit. Comma-separated list of device ids. Defaults to zero.
+  Power event device logical addresses (e.g. --devices 0,1). Default to 0
 
-#### Example
+- `--retries`  
+  Number of connection retries to the CEC adapter. Default is 5. Each try can take up to 10 seconds.
+
+- `--device-name`
+  Device name to report to CEC network. Default is the hostname
+
+
+Tips: You can use 
+
+#### Example using custom key mappings
+
+Key mapping data for CEC can be found [here](https://github.com/claes/cec/blob/6db0712de894ea0c026b023b02181fee00babd39/cec.go#L147)
+
+Linux key codes can be found [here](https://sites.uclouvain.be/SystInfo/usr/include/linux/input.h.html)
+
+Here for example, CEC buttons "1" and "2" are mapped to Ctrl+1 and Ctrl+2 to use Steam Big Picture overlays from my TV remote:
 
 ```sh
-./cec-controller --debug --keymap 1:105 --keymap 2:106
+./cec-controller --keymap 1:29+2 --keymap 2:29+3
 ```
 
 ## Systemd Integration
@@ -84,7 +99,7 @@ WantedBy=multi-user.target
 
 This app detects and reacts to:
 
-- **Startup:** Emitted when the service starts
+- **Startup:** Emitted when the service starts alongside systemd
 - **Shutdown:** On system shutdown/reboot
 - **Sleep/Resume:** On suspend/resume events
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=CEC Controller CLI Service
+Description=CEC Controller Service
 After=local-fs.target
 DefaultDependencies=no
 

@@ -16,7 +16,7 @@ jobs:
       with:
         go-version: stable
     - name: Install Dependencies
-      run: apt update && apt install -y libcec-dev libp8-platform-dev
+      run: sudo apt update && apt install -y libcec-dev libp8-platform-dev
     - name: Build Linux amd64 Binary
       run: |
         mkdir -p dist

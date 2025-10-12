@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/godbus/dbus/v5"
@@ -29,13 +30,17 @@ func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
 	}
 
 	// Subscribe to PrepareForSleep and PrepareForShutdown signals from logind
-	ruleSleep := "type='signal',sender='org.freedesktop.login1',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'"
-	ruleShutdown := "type='signal',sender='org.freedesktop.login1',interface='org.freedesktop.login1.Manager',member='PrepareForShutdown'"
-	if err := conn.AddMatchSignal(dbus.WithMatchOption("match", ruleSleep)); err != nil {
-		return err
+	if err := conn.AddMatchSignal(dbus.WithMatchSender("org.freedesktop.login1"),
+		dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
+		dbus.WithMatchMember("PrepareForSleep"),
+	); err != nil {
+		return fmt.Errorf("failed to add match for sleep signals: %w", err)
 	}
-	if err := conn.AddMatchSignal(dbus.WithMatchOption("match", ruleShutdown)); err != nil {
-		return err
+	if err := conn.AddMatchSignal(dbus.WithMatchSender("org.freedesktop.login1"),
+		dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
+		dbus.WithMatchMember("PrepareForShutdown"),
+	); err != nil {
+		return fmt.Errorf("failed to add match for shutdown signals: %w", err)
 	}
 
 	signalCh := make(chan *dbus.Signal, 10)

@@ -13,19 +13,25 @@ type CEC struct {
 	retries    int
 	deviceName string
 
-	conn   *cec.Connection
-	connMu sync.RWMutex
+	conn       CECConnection
+	realConn   *cec.Connection // Keep reference for reopening
+	connMu     sync.RWMutex
+	cecOpener  func(string, string) (*cec.Connection, error)
 
 	keyPresses chan *cec.KeyPress
 }
 
 func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress) (*CEC, error) {
+	return NewCECWithOpener(adapter, deviceName, connectionRetries, keyPresses, cec.Open)
+}
+
+func NewCECWithOpener(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, opener func(string, string) (*cec.Connection, error)) (*CEC, error) {
 	if connectionRetries < 1 {
 		slog.Warn("Connection retries must be at least 1, setting to 1")
 		connectionRetries = 1
 	}
 
-	c, err := cec.Open(adapter, deviceName)
+	c, err := opener(adapter, deviceName)
 	if err != nil {
 		return nil, err
 	}
@@ -33,11 +39,13 @@ func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses
 	c.KeyPresses = keyPresses
 
 	return &CEC{
-		conn:       c,
+		conn:       &CECConnectionWrapper{conn: c},
+		realConn:   c,
 		adapter:    adapter,
 		retries:    connectionRetries,
 		deviceName: deviceName,
 		keyPresses: keyPresses,
+		cecOpener:  opener,
 	}, nil
 }
 
@@ -48,18 +56,20 @@ func (c *CEC) reopen() error {
 		slog.Warn("CEC Connection lost, reopening...")
 		c.conn.Close()
 		c.conn = nil
+		c.realConn = nil
 	}
 
 	for i := 0; i < c.retries; i++ {
 		var err error
-		c.conn, err = cec.Open(c.adapter, c.deviceName)
+		c.realConn, err = c.cecOpener(c.adapter, c.deviceName)
 		if err != nil {
 			slog.Error("Failed to open CEC connection", "attempt", i+1, "error", err)
 			continue
 		}
 
 		// Here we are literally hoping nobody reads this value concurrently we have no choice
-		c.conn.KeyPresses = c.keyPresses
+		c.realConn.KeyPresses = c.keyPresses
+		c.conn = &CECConnectionWrapper{conn: c.realConn}
 		slog.Info("CEC connection re-established")
 		return nil
 	}

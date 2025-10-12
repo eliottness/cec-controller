@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"testing"
+
+	"github.com/claes/cec"
 )
 
 // MockCECConnection is a mock implementation of CECConnection for testing
@@ -36,6 +38,10 @@ func (m *MockCECConnection) Close() {
 	if m.CloseFunc != nil {
 		m.CloseFunc()
 	}
+}
+
+func (m *MockCECConnection) SetKeyPressesChan(chan *cec.KeyPress) {
+	// No-op for mock
 }
 
 func TestCECConnection_Interface(t *testing.T) {

@@ -14,7 +14,6 @@ type CEC struct {
 	deviceName string
 
 	conn      CECConnection
-	realConn  *cec.Connection // Keep reference for reopening
 	connMu    sync.RWMutex
 	cecOpener func(string, string) (*cec.Connection, error)
 
@@ -40,7 +39,6 @@ func newCECWithOpener(adapter string, deviceName string, connectionRetries int, 
 
 	return &CEC{
 		conn:       &CECConnectionWrapper{Connection: c},
-		realConn:   c,
 		adapter:    adapter,
 		retries:    connectionRetries,
 		deviceName: deviceName,
@@ -56,20 +54,18 @@ func (c *CEC) reopen() error {
 		slog.Warn("CEC Connection lost, reopening...")
 		c.conn.Close()
 		c.conn = nil
-		c.realConn = nil
 	}
 
 	for i := 0; i < c.retries; i++ {
-		var err error
-		c.realConn, err = c.cecOpener(c.adapter, c.deviceName)
+		conn, err := c.cecOpener(c.adapter, c.deviceName)
 		if err != nil {
 			slog.Error("Failed to open CEC connection", "attempt", i+1, "error", err)
 			continue
 		}
 
 		// Here we are literally hoping nobody reads this value concurrently we have no choice
-		c.realConn.KeyPresses = c.keyPresses
-		c.conn = &CECConnectionWrapper{Connection: c.realConn}
+		c.conn = &CECConnectionWrapper{Connection: conn}
+		c.conn.SetKeyPressesChan(c.keyPresses)
 		slog.Info("CEC connection re-established")
 		return nil
 	}

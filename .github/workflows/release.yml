@@ -147,13 +147,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ubuntu-binaries
-          path: dist/
+          path: dist-temp-ubuntu/
 
       - name: Download Fedora binaries
         uses: actions/download-artifact@v4
         with:
           name: fedora-binaries
-          path: dist/
+          path: dist-temp-fedora/
+
+      - name: Merge artifacts into dist directory
+        run: |
+          mkdir -p dist
+          cp -r dist-temp-ubuntu/* dist/
+          cp -r dist-temp-fedora/* dist/
 
       - name: List dist contents
         run: |
@@ -161,7 +167,7 @@ jobs:
           find dist -type f -ls
 
       - name: Run GoReleaser (Dry Run)
-        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
@@ -170,7 +176,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run GoReleaser (Release)
-        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
@@ -179,7 +185,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload dry-run artifacts
-        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
         uses: actions/upload-artifact@v4
         with:
           name: dry-run-packages

@@ -26,6 +26,9 @@ nfpms:
     priority: "optional"
     bindir: "/usr/bin"
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_{{ .Arch }}"
+    contents:
+      - src: ./cec-controller.service
+        dst: /lib/systemd/system/cec-controller.service
     dependencies:
       - libcec7
 
@@ -41,6 +44,9 @@ nfpms:
     vendor: "eliottness"
     bindir: "/usr/bin"
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_fedora_{{ .Arch }}"
+    contents:
+      - src: ./cec-controller.service
+        dst: /lib/systemd/system/cec-controller.service
     dependencies:
       - libcec
 

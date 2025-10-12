@@ -84,7 +84,6 @@ See [`cec-controller.service`](cec-controller.service):
 [Unit]
 Description=CEC Controller CLI Service
 After=local-fs.target
-DefaultDependencies=no
 
 [Service]
 Type=simple

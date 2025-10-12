@@ -1,7 +1,6 @@
 [Unit]
 Description=CEC Controller Service
 After=local-fs.target
-DefaultDependencies=no
 
 [Service]
 Type=simple

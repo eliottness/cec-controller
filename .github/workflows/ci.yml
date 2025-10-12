@@ -53,7 +53,7 @@ jobs:
       - name: install dependencies
         run: | 
           sudo apt update
-          sudo apt install -y --no-install-recommends libcec-dev libp8-platform-dev libudev-dev gcc
+          sudo apt install -y --no-install-recommends libcec-dev libp8-platform-dev
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
@@ -62,8 +62,6 @@ jobs:
           distribution: goreleaser
           version: '~> v2'
           args: release --snapshot --skip=publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run GoReleaser (Release)
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
@@ -73,7 +71,7 @@ jobs:
           version: '~> v2'
           args: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

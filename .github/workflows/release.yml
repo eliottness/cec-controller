@@ -54,6 +54,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libcec-dev libp8-platform-dev gcc-aarch64-linux-gnu
+          # Add arm64 architecture and install cross-compilation libraries
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y libcec-dev:arm64 libp8-platform-dev:arm64
 
       - name: Build Ubuntu amd64
         env:
@@ -103,7 +107,7 @@ jobs:
             fedora:latest bash -c "
               dnf install -y golang libcec-devel gcc make git && \
               mkdir -p dist/fedora-amd64_linux_amd64_v1 && \
-              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -o dist/fedora-amd64_linux_amd64_v1/cec-controller .
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildvcs=false -ldflags='-s -w' -o dist/fedora-amd64_linux_amd64_v1/cec-controller .
             "
 
       - name: Build Fedora arm64 with cross-compilation in Docker
@@ -112,7 +116,7 @@ jobs:
             fedora:latest bash -c "
               dnf install -y golang libcec-devel gcc-aarch64-linux-gnu make git && \
               mkdir -p dist/fedora-arm64_linux_arm64 && \
-              CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -ldflags='-s -w' -o dist/fedora-arm64_linux_arm64/cec-controller .
+              CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -buildvcs=false -ldflags='-s -w' -o dist/fedora-arm64_linux_arm64/cec-controller .
             "
 
       - name: Upload Fedora binaries

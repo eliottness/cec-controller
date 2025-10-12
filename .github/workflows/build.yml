@@ -42,6 +42,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libcec-dev libp8-platform-dev gcc-aarch64-linux-gnu
+          # Add arm64 architecture and install cross-compilation libraries
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y libcec-dev:arm64 libp8-platform-dev:arm64
 
       - name: Build Ubuntu amd64
         env:

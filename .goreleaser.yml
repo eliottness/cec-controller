@@ -2,7 +2,7 @@ version: 2
 project_name: cec-controller
 
 builds:
-  - main: ./main.go
+  - main: .
     goos: [linux]
     goarch: [amd64, arm64]
     ldflags: -s -w

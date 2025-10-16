@@ -17,6 +17,9 @@ custom key mappings.
 
 ## Installation
 
+> [!IMPORTANT]  
+> Make sure to have no other services running libcec or any kind of cec-client because only one process can lock the CEC serial.
+
 ### From Release (Recommended)
 
 Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page:
@@ -80,9 +83,6 @@ go build -o cec-controller main.go
 
 - `--device-name`
   Device name to report to CEC network. Default is the hostname
-
-
-Tips: You can use 
 
 #### Example using custom key mappings
 

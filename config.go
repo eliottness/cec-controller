@@ -93,10 +93,9 @@ func loadConfig() (*Config, error) {
 	if cfg.DeviceName == "" {
 		cfg.DeviceName, _ = os.Hostname()
 	}
+	// If no devices configured and power events not explicitly disabled,
+	// disable power events by default
 	if len(cfg.PowerDevices) == 0 && !cfg.NoPowerEvents {
-		cfg.PowerDevices = []int{0}
-	}
-	if cfg.NoPowerEvents || len(cfg.PowerDevices) == 0 {
 		cfg.NoPowerEvents = true
 	}
 	if cfg.QueueDir == "" {
@@ -164,7 +163,7 @@ func parseKeyMapFlags(keyMapArgs []string) map[string][]int {
 
 func parseDevices(devices []string) []int {
 	if len(devices) == 0 {
-		return []int{0} // Default to device 0
+		return []int{}
 	}
 	var result []int
 	for _, devStr := range devices {

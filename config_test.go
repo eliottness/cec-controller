@@ -207,9 +207,9 @@ func TestParseDevices(t *testing.T) {
 		expected []int
 	}{
 		{
-			name:     "Empty input defaults to device 0",
+			name:     "Empty input returns empty array",
 			input:    []string{},
-			expected: []int{0},
+			expected: []int{},
 		},
 		{
 			name:     "Single device",

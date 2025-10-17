@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ type Config struct {
 	PowerDevices      []int
 	ConnectionRetries int
 	QueueDir          string
+	RestartRetries    int
 }
 
 func setupLogger(debug bool) {
@@ -105,7 +107,10 @@ func runController(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				slog.Warn("Failed to send power command after connection reopen, libcec is wierd so we need to restart the current process...")
 				cancel()
-				queue.RestartProcess()
+				if !queue.RestartProcess(cfg.RestartRetries) {
+					slog.Error("Process restart failed or no retries left, exiting")
+					return fmt.Errorf("too much restarts")
+				}
 			}
 		case <-ctx.Done():
 			slog.Info("Shutting down...")

@@ -60,6 +60,28 @@ go build -o cec-controller main.go
 ./cec-controller [flags]
 ```
 
+### Configuration
+
+cec-controller can be configured via command-line flags or a YAML configuration file. Command-line flags take precedence over the configuration file.
+
+#### Configuration File
+
+Create a configuration file at `/etc/cec-controller.yaml`. See [`cec-controller.yaml.example`](cec-controller.yaml.example) for a complete example.
+
+```yaml
+# Example configuration
+cec-adapter: "/dev/ttyACM0"
+device-name: "My PC"
+debug: false
+retries: 5
+keymap:
+  "1": "29+2"    # CEC key 1 -> Ctrl+1
+  "2": "29+3"    # CEC key 2 -> Ctrl+2
+devices:
+  - "0"
+  - "1"
+```
+
 ### Common Flags
 
 - `--cec-adapter=<path>`  

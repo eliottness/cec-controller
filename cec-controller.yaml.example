@@ -1,0 +1,39 @@
+# cec-controller configuration file
+# This file should be placed at /etc/cec-controller.yaml
+#
+# All configuration options can also be specified via CLI flags.
+# CLI flags take precedence over config file values.
+
+# CEC adapter path (leave empty for auto-detect)
+# Example: /dev/ttyACM0
+cec-adapter: ""
+
+# Device name shown on your TV (leave empty for hostname)
+# Example: "My PC"
+device-name: ""
+
+# Enable debug output
+debug: false
+
+# Disable power event handling
+no-power-events: false
+
+# Number of times to retry CEC connection on failure
+retries: 5
+
+# Custom CEC-to-Linux key mapping
+# Format: map of CEC key code to Linux key code(s) separated by +
+# Example mappings for Steam Big Picture overlays:
+# keymap:
+#   "1": "29+2"    # CEC key 1 -> Ctrl+1
+#   "2": "29+3"    # CEC key 2 -> Ctrl+2
+keymap: {}
+
+# Power event device logical addresses
+# Default to device 0 (TV)
+# Example: [0, 1]
+devices: []
+
+# Directory for event queue (defaults to temp directory)
+# This is normally set via CEC_QUEUE_DIR environment variable
+queue-dir: ""

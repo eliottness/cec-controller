@@ -104,6 +104,24 @@ func (c *CEC) Standby(addresses ...int) error {
 	return c.power(c.conn.Standby, addresses...)
 }
 
+func (c *CEC) VolumeUp() error {
+	c.connMu.RLock()
+	defer c.connMu.RUnlock()
+	return c.conn.VolumeUp()
+}
+
+func (c *CEC) VolumeDown() error {
+	c.connMu.RLock()
+	defer c.connMu.RUnlock()
+	return c.conn.VolumeDown()
+}
+
+func (c *CEC) Mute() error {
+	c.connMu.RLock()
+	defer c.connMu.RUnlock()
+	return c.conn.Mute()
+}
+
 func (c *CEC) Close() {
 	if c.conn != nil {
 		c.conn.Close()

@@ -20,6 +20,9 @@ type Config struct {
 	PowerDevices      []int
 	ConnectionRetries int
 	QueueDir          string
+	NoVolumeSync      bool
+	VolumeStep        int
+	AudioDevice       int
 }
 
 type multiFlag []string
@@ -68,12 +71,19 @@ func parseFlags() *Config {
 	flag.IntVar(&cfg.ConnectionRetries, "retries", 5, "Number of times to retry CEC connection on failure")
 	flag.Var(&keyMapArgs, "keymap", "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
 	flag.Var(&powerDevices, "devices", "Power event device addresses (e.g. --devices 0,1). Default to 0")
+	flag.BoolVar(&cfg.NoVolumeSync, "no-volume-sync", false, "Disable volume synchronization")
+	flag.IntVar(&cfg.VolumeStep, "volume-step", 5, "Volume change step percentage (1-100)")
+	flag.IntVar(&cfg.AudioDevice, "audio-device", 5, "CEC audio device address for volume sync (default: 5 = Audio System)")
 	flag.Parse()
 	cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
 	cfg.PowerDevices = parseDevices(powerDevices)
 	cfg.NoPowerEvents = cfg.NoPowerEvents || len(cfg.PowerDevices) == 0
 	if cfg.DeviceName == "" {
 		cfg.DeviceName, _ = os.Hostname()
+	}
+	if cfg.VolumeStep < 1 || cfg.VolumeStep > 100 {
+		slog.Warn("Volume step must be between 1 and 100, using default 5")
+		cfg.VolumeStep = 5
 	}
 	if cfg.QueueDir = os.Getenv(queueDirEnvVar); cfg.QueueDir == "" {
 		var err error
@@ -125,6 +135,34 @@ func setupLogger(debug bool) {
 	slog.SetDefault(slog.New(handler))
 }
 
+func handleVolumeKey(cecKeyCode int, audioCtrl *AudioController, volumeStep int) bool {
+	volumeUpKey := 0x41   // CEC key code for VolumeUp
+	volumeDownKey := 0x42 // CEC key code for VolumeDown
+	muteKey := 0x43       // CEC key code for Mute
+
+	switch cecKeyCode {
+	case volumeUpKey:
+		slog.Info("CEC Volume Up pressed, increasing system volume", "step", volumeStep)
+		if err := audioCtrl.VolumeUp(volumeStep); err != nil {
+			slog.Error("Failed to increase system volume", "error", err)
+		}
+		return true
+	case volumeDownKey:
+		slog.Info("CEC Volume Down pressed, decreasing system volume", "step", volumeStep)
+		if err := audioCtrl.VolumeDown(volumeStep); err != nil {
+			slog.Error("Failed to decrease system volume", "error", err)
+		}
+		return true
+	case muteKey:
+		slog.Info("CEC Mute pressed, toggling system mute")
+		if err := audioCtrl.Mute(); err != nil {
+			slog.Error("Failed to toggle system mute", "error", err)
+		}
+		return true
+	}
+	return false
+}
+
 func main() {
 	cfg := parseFlags()
 	setupLogger(cfg.Debug)
@@ -164,6 +202,24 @@ func main() {
 		}
 	}
 
+	var audioCtrl *AudioController
+	var volumeChanges chan int
+	if !cfg.NoVolumeSync {
+		audioCtrl, err = NewAudioController()
+		if err != nil {
+			slog.Warn("Failed to initialize audio controller, volume sync disabled", "error", err)
+			cfg.NoVolumeSync = true
+		} else {
+			slog.Info("Volume synchronization enabled", "volume-step", cfg.VolumeStep, "audio-device", cfg.AudioDevice)
+			volumeChanges = make(chan int, 10)
+			go func() {
+				if err := audioCtrl.MonitorVolume(ctx, volumeChanges); err != nil && err != context.Canceled {
+					slog.Error("Volume monitoring stopped", "error", err)
+				}
+			}()
+		}
+	}
+
 	slog.Info("Listening for CEC key and power events... (Ctrl+C to exit)")
 	for {
 		select {
@@ -172,6 +228,15 @@ func main() {
 				// Ignore key release events
 				continue
 			}
+
+			// Handle volume keys if volume sync is enabled
+			if !cfg.NoVolumeSync && audioCtrl != nil {
+				handled := handleVolumeKey(kp.KeyCode, audioCtrl, cfg.VolumeStep)
+				if handled {
+					continue
+				}
+			}
+
 			keyMapObj.OnKeyPress(kp.KeyCode)
 		case ev := <-queue.OutPowerEvents:
 			switch ev.Type {
@@ -186,6 +251,12 @@ func main() {
 				slog.Warn("Failed to send power command after connection reopen, libcec is wierd so we need to restart the current process...")
 				cancel()
 				queue.RestartProcess()
+			}
+		case vol := <-volumeChanges:
+			if !cfg.NoVolumeSync {
+				slog.Debug("System volume changed, syncing to CEC device", "volume", vol)
+				// Note: CEC devices don't support setting absolute volume, only relative changes
+				// This channel is here for future enhancements or logging
 			}
 		case <-ctx.Done():
 			slog.Info("Shutting down...")

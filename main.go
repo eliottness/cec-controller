@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log/slog"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -20,92 +20,6 @@ type Config struct {
 	PowerDevices      []int
 	ConnectionRetries int
 	QueueDir          string
-}
-
-type multiFlag []string
-
-func (m *multiFlag) String() string         { return strings.Join(*m, ",") }
-func (m *multiFlag) Set(value string) error { *m = append(*m, value); return nil }
-
-func parseKeyMapFlags(keyMapArgs []string) map[string][]int {
-	m := make(map[string][]int)
-	for _, entry := range keyMapArgs {
-		parts := strings.Split(entry, ":")
-		if len(parts) != 2 {
-			slog.Warn("Invalid keymap entry", "entry", entry)
-			continue
-		}
-
-		codes := strings.Split(parts[1], "+")
-		var linuxCodes []int
-		for _, codeStr := range codes {
-			code, err := strconv.Atoi(codeStr)
-			if err != nil {
-				slog.Warn("Invalid linux key code", "code", codeStr, "error", err)
-				continue
-			}
-			linuxCodes = append(linuxCodes, code)
-		}
-
-		m[parts[0]] = linuxCodes
-	}
-	return m
-}
-
-const queueDirEnvVar = "CEC_QUEUE_DIR"
-
-func parseFlags() *Config {
-	var (
-		keyMapArgs   multiFlag
-		powerDevices multiFlag
-		cfg          Config
-	)
-
-	flag.StringVar(&cfg.CECAdapter, "cec-adapter", "", "CEC adapter path (leave empty for auto-detect)")
-	flag.StringVar(&cfg.DeviceName, "device-name", "", "Device name shown on your TV (leave empty for hostname)")
-	flag.BoolVar(&cfg.Debug, "debug", false, "Enable debug output")
-	flag.BoolVar(&cfg.NoPowerEvents, "no-power-events", false, "Disable power event handling")
-	flag.IntVar(&cfg.ConnectionRetries, "retries", 5, "Number of times to retry CEC connection on failure")
-	flag.Var(&keyMapArgs, "keymap", "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
-	flag.Var(&powerDevices, "devices", "Power event device addresses (e.g. --devices 0,1). Default to 0")
-	flag.Parse()
-	cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
-	cfg.PowerDevices = parseDevices(powerDevices)
-	cfg.NoPowerEvents = cfg.NoPowerEvents || len(cfg.PowerDevices) == 0
-	if cfg.DeviceName == "" {
-		cfg.DeviceName, _ = os.Hostname()
-	}
-	if cfg.QueueDir = os.Getenv(queueDirEnvVar); cfg.QueueDir == "" {
-		var err error
-		if cfg.QueueDir, err = os.MkdirTemp("", "cec-queue-*"); err != nil {
-			slog.Error("Failed to create temporary queue dir", "error", err)
-			os.Exit(1)
-		}
-	}
-	return &cfg
-}
-
-func parseDevices(devices []string) []int {
-	if len(devices) == 0 {
-		return []int{0} // Default to device 0
-	}
-	var result []int
-	for _, devStr := range devices {
-		parts := strings.Split(devStr, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			dev, err := strconv.Atoi(part)
-			if err != nil {
-				slog.Warn("Invalid device address", "device", part, "error", err)
-				continue
-			}
-			result = append(result, dev)
-		}
-	}
-	return result
 }
 
 func setupLogger(debug bool) {
@@ -125,8 +39,14 @@ func setupLogger(debug bool) {
 	slog.SetDefault(slog.New(handler))
 }
 
-func main() {
-	cfg := parseFlags()
+func runController(cmd *cobra.Command, args []string) error {
+	// Load configuration from file first
+	cfg, err := loadConfig()
+	if err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		return err
+	}
+
 	setupLogger(cfg.Debug)
 
 	slog.Info("Starting cec-controller", "config", cfg)
@@ -137,7 +57,7 @@ func main() {
 	queue, err := NewQueue(ctx, cfg.QueueDir)
 	if err != nil {
 		slog.Error("Failed to initialize event queue", "dir", cfg.QueueDir, "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer queue.Close()
 
@@ -145,13 +65,13 @@ func main() {
 	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides)
 	if err != nil {
 		slog.Error("Failed to initialize virtual keyboard", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents)
 	if err != nil {
 		slog.Error("Failed to open CEC", "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer c.Close()
 
@@ -160,7 +80,7 @@ func main() {
 		queue.InPowerEvents <- PowerEvent{Type: PowerOn, Active: true}
 		if err := PowerEventListener(ctx, queue.InPowerEvents); err != nil {
 			slog.Error("Failed to start power event listener", "error", err)
-			os.Exit(1)
+			return err
 		}
 	}
 
@@ -189,7 +109,42 @@ func main() {
 			}
 		case <-ctx.Done():
 			slog.Info("Shutting down...")
-			return
+			return nil
 		}
+	}
+}
+
+func main() {
+	var rootCmd = &cobra.Command{
+		Use:   "cec-controller",
+		Short: "HDMI-CEC controller for Linux",
+		Long: `CEC Controller is a Linux CLI application that listens for HDMI-CEC key events
+and translates them to Linux virtual keyboard actions. It also reacts to system
+power events (startup, shutdown, sleep, resume).`,
+		RunE: runController,
+	}
+
+	// Define flags that bind to viper config
+	rootCmd.Flags().String("cec-adapter", "", "CEC adapter path (leave empty for auto-detect)")
+	rootCmd.Flags().String("device-name", "", "Device name shown on your TV (leave empty for hostname)")
+	rootCmd.Flags().Bool("debug", false, "Enable debug output")
+	rootCmd.Flags().Bool("no-power-events", false, "Disable power event handling")
+	rootCmd.Flags().Int("retries", 5, "Number of times to retry CEC connection on failure")
+	rootCmd.Flags().StringSlice("keymap", []string{}, "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
+	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Default to 0")
+	rootCmd.Flags().String("queue-dir", "", "Directory for event queue (defaults to temp directory)")
+
+	// Bind flags to viper
+	viper.BindPFlag("cec-adapter", rootCmd.Flags().Lookup("cec-adapter"))
+	viper.BindPFlag("device-name", rootCmd.Flags().Lookup("device-name"))
+	viper.BindPFlag("debug", rootCmd.Flags().Lookup("debug"))
+	viper.BindPFlag("no-power-events", rootCmd.Flags().Lookup("no-power-events"))
+	viper.BindPFlag("retries", rootCmd.Flags().Lookup("retries"))
+	viper.BindPFlag("keymap", rootCmd.Flags().Lookup("keymap"))
+	viper.BindPFlag("devices", rootCmd.Flags().Lookup("devices"))
+	viper.BindPFlag("queue-dir", rootCmd.Flags().Lookup("queue-dir"))
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
 	}
 }

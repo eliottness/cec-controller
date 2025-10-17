@@ -75,8 +75,8 @@ device-name: "My PC"
 debug: false
 retries: 5
 keymap:
-  - "1:29+2"    # CEC key 1 -> Ctrl+1
-  - "2:29+3"    # CEC key 2 -> Ctrl+2
+  "1": "29+2"    # CEC key 1 -> Ctrl+1
+  "2": "29+3"    # CEC key 2 -> Ctrl+2
 devices:
   - "0"
   - "1"

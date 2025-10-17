@@ -20,8 +20,8 @@ debug: true
 no-power-events: false
 retries: 10
 keymap:
-  - "1:105"
-  - "2:106"
+  "1": "105"
+  "2": "106"
 devices:
   - "0"
   - "1"
@@ -59,13 +59,83 @@ devices:
 		t.Errorf("Expected retries to be 10, got %d", retries)
 	}
 
-	// Test array values
-	keymap := viper.GetStringSlice("keymap")
+	// Test map values
+	keymap := viper.GetStringMapString("keymap")
 	if len(keymap) != 2 {
 		t.Errorf("Expected 2 keymap entries, got %d", len(keymap))
 	}
-	if keymap[0] != "1:105" {
-		t.Errorf("Expected first keymap entry to be '1:105', got '%s'", keymap[0])
+	if keymap["1"] != "105" {
+		t.Errorf("Expected keymap['1'] to be '105', got '%s'", keymap["1"])
+	}
+}
+
+func TestParseKeyMapFromMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]interface{}
+		expected map[string][]int
+	}{
+		{
+			name: "Single key mapping",
+			input: map[string]interface{}{
+				"1": "105",
+			},
+			expected: map[string][]int{
+				"1": {105},
+			},
+		},
+		{
+			name: "Multiple key codes",
+			input: map[string]interface{}{
+				"1": "29+105",
+			},
+			expected: map[string][]int{
+				"1": {29, 105},
+			},
+		},
+		{
+			name: "Multiple mappings",
+			input: map[string]interface{}{
+				"1": "105",
+				"2": "106",
+			},
+			expected: map[string][]int{
+				"1": {105},
+				"2": {106},
+			},
+		},
+		{
+			name: "Invalid value type",
+			input: map[string]interface{}{
+				"1": 105, // Should be string
+			},
+			expected: map[string][]int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseKeyMapFromMap(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected %d mappings, got %d", len(tt.expected), len(result))
+			}
+			for key, expectedCodes := range tt.expected {
+				resultCodes, ok := result[key]
+				if !ok {
+					t.Errorf("Expected key '%s' not found in result", key)
+					continue
+				}
+				if len(resultCodes) != len(expectedCodes) {
+					t.Errorf("For key '%s', expected %d codes, got %d", key, len(expectedCodes), len(resultCodes))
+					continue
+				}
+				for i, code := range expectedCodes {
+					if resultCodes[i] != code {
+						t.Errorf("For key '%s' at index %d, expected code %d, got %d", key, i, code, resultCodes[i])
+					}
+				}
+			}
+		})
 	}
 }
 

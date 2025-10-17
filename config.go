@@ -40,7 +40,11 @@ func loadConfig() (*Config, error) {
 	// Handle keymap overrides
 	if keyMapConfig := viper.Get("keymap"); keyMapConfig != nil {
 		switch v := keyMapConfig.(type) {
+		case map[string]interface{}:
+			// Handle map format: {"1": "29+2", "2": "29+3"}
+			cfg.KeyMapOverrides = parseKeyMapFromMap(v)
 		case []interface{}:
+			// Handle array format for backward compatibility: ["1:105", "2:106"]
 			var keyMapArgs []string
 			for _, item := range v {
 				if str, ok := item.(string); ok {
@@ -49,6 +53,7 @@ func loadConfig() (*Config, error) {
 			}
 			cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
 		case []string:
+			// Handle string array for backward compatibility
 			cfg.KeyMapOverrides = parseKeyMapFlags(v)
 		}
 	}
@@ -102,6 +107,34 @@ func loadConfig() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseKeyMapFromMap(keyMapConfig map[string]interface{}) map[string][]int {
+	m := make(map[string][]int)
+	for cecKey, value := range keyMapConfig {
+		var linuxCodesStr string
+		switch v := value.(type) {
+		case string:
+			linuxCodesStr = v
+		default:
+			slog.Warn("Invalid keymap value type", "key", cecKey, "value", value)
+			continue
+		}
+
+		codes := strings.Split(linuxCodesStr, "+")
+		var linuxCodes []int
+		for _, codeStr := range codes {
+			code, err := strconv.Atoi(codeStr)
+			if err != nil {
+				slog.Warn("Invalid linux key code", "code", codeStr, "error", err)
+				continue
+			}
+			linuxCodes = append(linuxCodes, code)
+		}
+
+		m[cecKey] = linuxCodes
+	}
+	return m
 }
 
 func parseKeyMapFlags(keyMapArgs []string) map[string][]int {

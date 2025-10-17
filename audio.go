@@ -57,7 +57,7 @@ func detectAudioSystem() AudioSystem {
 // VolumeUp increases the system volume by the specified percentage
 func (a *AudioController) VolumeUp(percentage int) error {
 	slog.Debug("Increasing system volume", "percentage", percentage)
-	
+
 	switch a.system {
 	case AudioSystemPipeWire:
 		return a.executeCommand("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", fmt.Sprintf("%d%%+", percentage))
@@ -71,7 +71,7 @@ func (a *AudioController) VolumeUp(percentage int) error {
 // VolumeDown decreases the system volume by the specified percentage
 func (a *AudioController) VolumeDown(percentage int) error {
 	slog.Debug("Decreasing system volume", "percentage", percentage)
-	
+
 	switch a.system {
 	case AudioSystemPipeWire:
 		return a.executeCommand("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", fmt.Sprintf("%d%%-", percentage))
@@ -85,7 +85,7 @@ func (a *AudioController) VolumeDown(percentage int) error {
 // Mute toggles the mute state of the system audio
 func (a *AudioController) Mute() error {
 	slog.Debug("Toggling system mute")
-	
+
 	switch a.system {
 	case AudioSystemPipeWire:
 		return a.executeCommand("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle")
@@ -99,7 +99,7 @@ func (a *AudioController) Mute() error {
 // GetVolume retrieves the current system volume as a percentage (0-100)
 func (a *AudioController) GetVolume() (int, error) {
 	var cmd *exec.Cmd
-	
+
 	switch a.system {
 	case AudioSystemPipeWire:
 		cmd = exec.Command("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
@@ -120,7 +120,7 @@ func (a *AudioController) GetVolume() (int, error) {
 // parseVolume extracts the volume percentage from command output
 func parseVolume(output string, system AudioSystem) (int, error) {
 	output = strings.TrimSpace(output)
-	
+
 	switch system {
 	case AudioSystemPipeWire:
 		// wpctl returns "Volume: 0.50" format
@@ -149,7 +149,7 @@ func parseVolume(output string, system AudioSystem) (int, error) {
 			}
 		}
 	}
-	
+
 	return 0, fmt.Errorf("failed to parse volume from output: %s", output)
 }
 
@@ -159,7 +159,7 @@ func (a *AudioController) MonitorVolume(ctx context.Context, changes chan<- int)
 	defer ticker.Stop()
 
 	lastVolume := -1
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -170,7 +170,7 @@ func (a *AudioController) MonitorVolume(ctx context.Context, changes chan<- int)
 				slog.Debug("Failed to get current volume", "error", err)
 				continue
 			}
-			
+
 			if currentVolume != lastVolume && lastVolume != -1 {
 				slog.Debug("Volume changed", "from", lastVolume, "to", currentVolume)
 				select {

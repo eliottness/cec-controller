@@ -128,7 +128,7 @@ func TestDetectAudioSystem(t *testing.T) {
 	// This is a basic test that just checks the function runs
 	// In a real environment, it will detect the actual audio system
 	system := detectAudioSystem()
-	
+
 	// We can't make assumptions about the test environment, so just verify
 	// that it returns one of the valid types
 	validSystems := []AudioSystem{AudioSystemPulseAudio, AudioSystemPipeWire, AudioSystemUnknown}
@@ -139,7 +139,7 @@ func TestDetectAudioSystem(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Errorf("detectAudioSystem() returned invalid system: %s", system)
 	}

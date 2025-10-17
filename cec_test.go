@@ -9,18 +9,18 @@ import (
 
 // MockCECConnection is a mock implementation of CECConnection for testing
 type MockCECConnection struct {
-	PowerOnFunc    func(address int) error
-	StandbyFunc    func(address int) error
-	VolumeUpFunc   func() error
-	VolumeDownFunc func() error
-	MuteFunc       func() error
-	CloseFunc      func()
-	PowerOnCalls   []int
-	StandbyCalls   []int
-	VolumeUpCalls  int
+	PowerOnFunc     func(address int) error
+	StandbyFunc     func(address int) error
+	VolumeUpFunc    func() error
+	VolumeDownFunc  func() error
+	MuteFunc        func() error
+	CloseFunc       func()
+	PowerOnCalls    []int
+	StandbyCalls    []int
+	VolumeUpCalls   int
 	VolumeDownCalls int
-	MuteCalls      int
-	CloseCalled    bool
+	MuteCalls       int
+	CloseCalled     bool
 }
 
 func (m *MockCECConnection) PowerOn(address int) error {

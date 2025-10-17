@@ -9,12 +9,18 @@ import (
 
 // MockCECConnection is a mock implementation of CECConnection for testing
 type MockCECConnection struct {
-	PowerOnFunc  func(address int) error
-	StandbyFunc  func(address int) error
-	CloseFunc    func()
-	PowerOnCalls []int
-	StandbyCalls []int
-	CloseCalled  bool
+	PowerOnFunc    func(address int) error
+	StandbyFunc    func(address int) error
+	VolumeUpFunc   func() error
+	VolumeDownFunc func() error
+	MuteFunc       func() error
+	CloseFunc      func()
+	PowerOnCalls   []int
+	StandbyCalls   []int
+	VolumeUpCalls  int
+	VolumeDownCalls int
+	MuteCalls      int
+	CloseCalled    bool
 }
 
 func (m *MockCECConnection) PowerOn(address int) error {
@@ -31,6 +37,30 @@ func (m *MockCECConnection) Standby(address int) error {
 		return m.StandbyFunc(address)
 	}
 	return errors.New("not nil means success in libcec")
+}
+
+func (m *MockCECConnection) VolumeUp() error {
+	m.VolumeUpCalls++
+	if m.VolumeUpFunc != nil {
+		return m.VolumeUpFunc()
+	}
+	return nil
+}
+
+func (m *MockCECConnection) VolumeDown() error {
+	m.VolumeDownCalls++
+	if m.VolumeDownFunc != nil {
+		return m.VolumeDownFunc()
+	}
+	return nil
+}
+
+func (m *MockCECConnection) Mute() error {
+	m.MuteCalls++
+	if m.MuteFunc != nil {
+		return m.MuteFunc()
+	}
+	return nil
 }
 
 func (m *MockCECConnection) Close() {
@@ -222,5 +252,89 @@ func TestCECConnectionWrapper(t *testing.T) {
 	err := conn.PowerOn(0)
 	if err == nil {
 		t.Error("Expected non-nil error from mock")
+	}
+}
+
+func TestMockCECConnection_VolumeUp(t *testing.T) {
+	mock := &MockCECConnection{}
+
+	err := mock.VolumeUp()
+	if err != nil {
+		t.Errorf("Expected nil error from VolumeUp, got %v", err)
+	}
+
+	if mock.VolumeUpCalls != 1 {
+		t.Errorf("Expected 1 VolumeUp call, got %d", mock.VolumeUpCalls)
+	}
+}
+
+func TestMockCECConnection_VolumeDown(t *testing.T) {
+	mock := &MockCECConnection{}
+
+	err := mock.VolumeDown()
+	if err != nil {
+		t.Errorf("Expected nil error from VolumeDown, got %v", err)
+	}
+
+	if mock.VolumeDownCalls != 1 {
+		t.Errorf("Expected 1 VolumeDown call, got %d", mock.VolumeDownCalls)
+	}
+}
+
+func TestMockCECConnection_Mute(t *testing.T) {
+	mock := &MockCECConnection{}
+
+	err := mock.Mute()
+	if err != nil {
+		t.Errorf("Expected nil error from Mute, got %v", err)
+	}
+
+	if mock.MuteCalls != 1 {
+		t.Errorf("Expected 1 Mute call, got %d", mock.MuteCalls)
+	}
+}
+
+func TestMockCECConnection_VolumeCustomFunctions(t *testing.T) {
+	volumeUpCalled := false
+	volumeDownCalled := false
+	muteCalled := false
+
+	mock := &MockCECConnection{
+		VolumeUpFunc: func() error {
+			volumeUpCalled = true
+			return nil
+		},
+		VolumeDownFunc: func() error {
+			volumeDownCalled = true
+			return errors.New("custom error")
+		},
+		MuteFunc: func() error {
+			muteCalled = true
+			return nil
+		},
+	}
+
+	err := mock.VolumeUp()
+	if !volumeUpCalled {
+		t.Error("Expected custom VolumeUpFunc to be called")
+	}
+	if err != nil {
+		t.Errorf("Expected nil error from VolumeUp, got %v", err)
+	}
+
+	err = mock.VolumeDown()
+	if !volumeDownCalled {
+		t.Error("Expected custom VolumeDownFunc to be called")
+	}
+	if err == nil {
+		t.Error("Expected custom error from VolumeDown")
+	}
+
+	err = mock.Mute()
+	if !muteCalled {
+		t.Error("Expected custom MuteFunc to be called")
+	}
+	if err != nil {
+		t.Errorf("Expected nil error from Mute, got %v", err)
 	}
 }

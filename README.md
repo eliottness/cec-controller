@@ -10,6 +10,8 @@ custom key mappings.
   presses from connected HDMI devices.
 - **Virtual keyboard emulation:** Maps CEC keys to Linux key codes and triggers key events
   using [micmonay/keybd_event](https://github.com/micmonay/keybd_event). (See default key map [here](keymap.go))
+- **Volume synchronization:** Bidirectional volume control between CEC devices and Linux audio systems (PulseAudio/PipeWire).
+  Remote volume buttons control system volume, and system volume changes can optionally sync to CEC devices.
 - **Customizable key mapping:** Override or extend the CEC→Linux key map via CLI flags.
 - **Power event hooks:** Responds to system startup, shutdown, sleep, and resume of the host machine and transmits
   corresponding CEC commands (e.g. "Power On", "Standby") to connected devices.
@@ -84,6 +86,15 @@ go build -o cec-controller main.go
 - `--device-name`
   Device name to report to CEC network. Default is the hostname
 
+- `--no-volume-sync`
+  Disable volume synchronization between CEC devices and system audio.
+
+- `--volume-step`
+  Volume change step percentage (1-100). Default is 5.
+
+- `--audio-device`
+  CEC audio device address for volume sync. Default is 5 (Audio System).
+
 #### Example using custom key mappings
 
 Key mapping data for CEC can be found [here](https://github.com/claes/cec/blob/6db0712de894ea0c026b023b02181fee00babd39/cec.go#L147)
@@ -113,6 +124,44 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 ```
+
+## Volume Synchronization
+
+CEC Controller supports bidirectional volume control between your CEC-enabled devices and Linux audio system (PulseAudio or PipeWire):
+
+### CEC → System Audio (Default Behavior)
+
+When volume sync is enabled (default), pressing volume buttons on your TV remote will control your system volume:
+- **Volume Up/Down:** Adjusts system volume by the configured step (default 5%)
+- **Mute:** Toggles system audio mute
+
+This works automatically with both PulseAudio and PipeWire. The application will detect which audio system is running.
+
+### Disabling Volume Sync
+
+If you prefer to use the default keyboard shortcuts for volume control, disable volume sync:
+
+```sh
+./cec-controller --no-volume-sync
+```
+
+### Configuration Options
+
+- `--volume-step <percentage>`: Adjust the volume change increment (default: 5%)
+- `--audio-device <address>`: CEC device address for audio system (default: 5)
+
+Example with custom volume step:
+```sh
+./cec-controller --volume-step 10
+```
+
+### Requirements
+
+Volume synchronization requires either:
+- **PipeWire** with `wpctl` command available, or
+- **PulseAudio** with `pactl` command available
+
+Both are typically pre-installed on modern Linux distributions.
 
 ## Power Event Handling
 

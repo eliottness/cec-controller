@@ -6,6 +6,9 @@ import "github.com/claes/cec"
 type CECConnection interface {
 	PowerOn(address int) error
 	Standby(address int) error
+	VolumeUp() error
+	VolumeDown() error
+	Mute() error
 	SetKeyPressesChan(ch chan *cec.KeyPress)
 	Close()
 }

@@ -145,8 +145,7 @@ func (q *Queue) RestartProcess(retriesLeft int) bool {
 		slog.Error("Failed to restart", "error", err)
 		return false
 	}
-	// This line is only reached if syscall.Exec fails, which shouldn't happen
-	// but we handle it gracefully by returning true to indicate we attempted the restart
+	// syscall.Exec only returns on failure - success replaces the current process
 	return true
 }
 

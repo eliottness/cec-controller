@@ -131,7 +131,7 @@ power events (startup, shutdown, sleep, resume).`,
 	rootCmd.Flags().Bool("no-power-events", false, "Disable power event handling")
 	rootCmd.Flags().Int("retries", 5, "Number of times to retry CEC connection on failure")
 	rootCmd.Flags().StringSlice("keymap", []string{}, "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
-	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). If not specified, power events are disabled")
+	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Default to 0")
 	rootCmd.Flags().String("queue-dir", "", "Directory for event queue (defaults to temp directory)")
 
 	// Bind flags to viper

@@ -207,9 +207,9 @@ func TestParseDevices(t *testing.T) {
 		expected []int
 	}{
 		{
-			name:     "Empty input returns empty array",
+			name:     "Empty input defaults to device 0",
 			input:    []string{},
-			expected: []int{},
+			expected: []int{0},
 		},
 		{
 			name:     "Single device",
@@ -275,8 +275,8 @@ func TestDefaultValues(t *testing.T) {
 		t.Error("Expected device name to be set to hostname")
 	}
 
-	if !cfg.NoPowerEvents || len(cfg.PowerDevices) != 0 {
-		t.Error("Expected NoPowerEvents to be true when no devices specified")
+	if cfg.NoPowerEvents || len(cfg.PowerDevices) != 1 || cfg.PowerDevices[0] != 0 {
+		t.Errorf("Expected NoPowerEvents to be false and PowerDevices to be [0], got NoPowerEvents=%v, PowerDevices=%v", cfg.NoPowerEvents, cfg.PowerDevices)
 	}
 
 	if cfg.QueueDir != tempDir {

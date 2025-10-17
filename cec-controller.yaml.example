@@ -30,8 +30,8 @@ retries: 5
 keymap: {}
 
 # Power event device logical addresses
-# If not specified, power events are disabled
-# Example: [0, 1] for devices 0 (TV) and 1
+# Default to device 0 (TV)
+# Example: [0, 1]
 devices: []
 
 # Directory for event queue (defaults to temp directory)

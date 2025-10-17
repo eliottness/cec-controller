@@ -98,7 +98,7 @@ devices:
   Disable handling of system power events.
 
 - `--devices`  
-  Power event device logical addresses (e.g. --devices 0,1). If not specified, power events are disabled.
+  Power event device logical addresses (e.g. --devices 0,1). Default to 0
 
 - `--retries`  
   Number of connection retries to the CEC adapter. Default is 5. Each try can take up to 10 seconds.

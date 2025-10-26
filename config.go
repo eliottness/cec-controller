@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"strconv"
@@ -25,7 +26,7 @@ func loadConfig() (*Config, error) {
 
 	// Attempt to read config file (not an error if it doesn't exist)
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if !errors.Is(err, os.ErrNotExist) {
 			slog.Warn("Error reading config file", "path", configFilePath, "error", err)
 		}
 	}

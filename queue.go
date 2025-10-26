@@ -37,9 +37,9 @@ func NewQueue(ctx context.Context, dir string) (*Queue, error) {
 	}
 
 	inPowerEvents := make(chan PowerEvent, 10)
-	inKeyEvents := make(chan *cec.KeyPress, 10)
+	inKeyEvents := make(chan *cec.KeyPress, 100)
 	outPowerEvents := make(chan PowerEvent, 10)
-	outKeyEvents := make(chan *cec.KeyPress, 10)
+	outKeyEvents := make(chan *cec.KeyPress, 100)
 
 	q := &Queue{
 		InPowerEvents:  inPowerEvents,

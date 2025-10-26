@@ -85,7 +85,7 @@ func (km *KeyMap) OnKeyPress(cecKeyCode int) {
 		return
 	}
 
-	slog.Info("Sending virtual key event", "cec-key-code", cecKeyCode, "linux-key-code", linuxKeyCode)
+	slog.Debug("Sending virtual key event", "cec-key-code", cecKeyCode, "linux-key-code", linuxKeyCode)
 	kb.SetKeys(linuxKeyCode...)
 	if err := kb.Launching(); err != nil {
 		slog.Error("Failed to send key event", "error", err)

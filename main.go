@@ -32,12 +32,13 @@ func setupLogger(debug bool) {
 		lvl = slog.LevelInfo
 	}
 	// Remove timestamp from logs, it's not very useful since systemd already adds it
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl, ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.TimeKey && len(groups) == 0 {
-			return slog.Attr{}
-		}
-		return a
-	}})
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey && len(groups) == 0 {
+				return slog.Attr{}
+			}
+			return a
+		}})
 	slog.SetDefault(slog.New(handler))
 }
 
@@ -63,19 +64,19 @@ func runController(cmd *cobra.Command, args []string) error {
 	}
 	defer queue.Close()
 
+	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents)
+	if err != nil {
+		slog.Error("Failed to open CEC, you can specify a cec-adapter since auto-detect does not work", "cec-adapter", cfg.CECAdapter, "error", err)
+		return err
+	}
+	defer c.Close()
+
 	// Create KeyMap object
 	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides)
 	if err != nil {
 		slog.Error("Failed to initialize virtual keyboard", "error", err)
 		return err
 	}
-
-	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents)
-	if err != nil {
-		slog.Error("Failed to open CEC", "error", err)
-		return err
-	}
-	defer c.Close()
 
 	if !cfg.NoPowerEvents {
 		// cec-controller just started alongside the system, so we assume the system has to be powered on

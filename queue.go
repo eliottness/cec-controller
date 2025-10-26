@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"syscall"
@@ -119,17 +120,33 @@ func NewQueue(ctx context.Context, dir string) (*Queue, error) {
 
 // RestartProcess sometimes the cec library gets stuck and stops receiving events.
 // This function restarts the entire process making sure the queue is preserved between processes
-func (q *Queue) RestartProcess() {
+// Returns true if restart was attempted, false if no retries left
+func (q *Queue) RestartProcess(retriesLeft int) bool {
+	if retriesLeft <= 0 {
+		slog.Error("No process restarts remaining, cannot restart")
+		return false
+	}
+
 	execPath, err := os.Executable()
 	if err != nil {
 		slog.Error("Failed to get executable path, cannot restart", "error", err)
-		return
+		return false
 	}
 
+	slog.Warn("Restarting process", "retriesLeft", retriesLeft-1)
 	q.close(false)
-	if err := syscall.Exec(execPath, os.Args, append([]string{queueDirEnvVar + "=" + q.dir}, os.Environ()...)); err != nil {
+
+	// Pass the decremented retry count via environment variable
+	env := os.Environ()
+	env = append(env, queueDirEnvVar+"="+q.dir)
+	env = append(env, "CEC_RESTART_RETRIES="+fmt.Sprintf("%d", retriesLeft-1))
+
+	if err := syscall.Exec(execPath, os.Args, env); err != nil {
 		slog.Error("Failed to restart", "error", err)
+		return false
 	}
+	// syscall.Exec only returns on failure - success replaces the current process
+	return true
 }
 
 func (q *Queue) Close() {

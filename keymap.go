@@ -9,7 +9,8 @@ import (
 
 // KeyMap provides mapping from CEC key codes to Linux key codes and handles virtual key events.
 type KeyMap struct {
-	cecToLinux map[int][]int
+	cecToLinux      map[int][]int
+	volumeController VolumeController
 }
 
 var base = map[int]int{
@@ -37,15 +38,17 @@ var base = map[int]int{
 	cec.GetKeyCodeByName("7"): keybd.VK_7,
 	cec.GetKeyCodeByName("8"): keybd.VK_8,
 	cec.GetKeyCodeByName("9"): keybd.VK_9,
+}
 
-	// TODO: send MPRIS messages
-	//cec.GetKeyCodeByName("Volume Up"): keybd.VK_VOLUMEUP,
-	//cec.GetKeyCodeByName("Volume Down"): keybd.VK_VOLUMEDOWN,
-	//cec.GetKeyCodeByName("Mute"): keybd.VK_MUTE,
+// Volume keys are handled specially by VolumeController
+var volumeKeys = map[int]string{
+	cec.GetKeyCodeByName("Volume Up"):   "volume_up",
+	cec.GetKeyCodeByName("Volume Down"): "volume_down",
+	cec.GetKeyCodeByName("Mute"):        "mute",
 }
 
 // NewKeyMap creates a KeyMap, optionally overriding defaults.
-func NewKeyMap(overrides map[string][]int) (*KeyMap, error) {
+func NewKeyMap(overrides map[string][]int, volumeController VolumeController) (*KeyMap, error) {
 	// Base map (can be extended)
 
 	var keyMap = make(map[int][]int, len(base)+len(overrides))
@@ -67,12 +70,23 @@ func NewKeyMap(overrides map[string][]int) (*KeyMap, error) {
 	slog.Debug("Key map initialized", "mapping", base)
 
 	return &KeyMap{
-		cecToLinux: keyMap,
+		cecToLinux:       keyMap,
+		volumeController: volumeController,
 	}, nil
 }
 
 // OnKeyPress maps a CEC key code to Linux and sends the virtual key event.
 func (km *KeyMap) OnKeyPress(cecKeyCode int) {
+	// Check if this is a volume key
+	if volumeAction, isVolumeKey := volumeKeys[cecKeyCode]; isVolumeKey {
+		if km.volumeController != nil {
+			km.handleVolumeKey(volumeAction)
+		} else {
+			slog.Debug("Volume key pressed but volume control is disabled", "cec-key-code", cecKeyCode)
+		}
+		return
+	}
+
 	linuxKeyCode, ok := km.cecToLinux[cecKeyCode]
 	if !ok {
 		slog.Warn("Unmapped CEC key code", "cec-key-code", cecKeyCode)
@@ -89,5 +103,30 @@ func (km *KeyMap) OnKeyPress(cecKeyCode int) {
 	kb.SetKeys(linuxKeyCode...)
 	if err := kb.Launching(); err != nil {
 		slog.Error("Failed to send key event", "error", err)
+	}
+}
+
+// handleVolumeKey handles volume-related key presses
+func (km *KeyMap) handleVolumeKey(action string) {
+	if km.volumeController == nil {
+		slog.Debug("Volume key pressed but volume controller is nil", "action", action)
+		return
+	}
+
+	var err error
+	switch action {
+	case "volume_up":
+		err = km.volumeController.VolumeUp()
+	case "volume_down":
+		err = km.volumeController.VolumeDown()
+	case "mute":
+		err = km.volumeController.Mute()
+	default:
+		slog.Warn("Unknown volume action", "action", action)
+		return
+	}
+
+	if err != nil {
+		slog.Error("Failed to execute volume action", "action", action, "error", err)
 	}
 }

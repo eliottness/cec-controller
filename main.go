@@ -22,6 +22,8 @@ type Config struct {
 	ConnectionRetries int
 	QueueDir          string
 	RestartRetries    int
+	VolumeEnabled     bool
+	VolumeStep        int
 }
 
 func setupLogger(debug bool) {
@@ -71,8 +73,17 @@ func runController(cmd *cobra.Command, args []string) error {
 	}
 	defer c.Close()
 
+	// Create VolumeController if volume control is enabled
+	var volumeController VolumeController
+	if cfg.VolumeEnabled {
+		volumeController = NewVolumeController(cfg.VolumeStep)
+		slog.Info("Volume control enabled", "step", cfg.VolumeStep)
+	} else {
+		slog.Info("Volume control disabled")
+	}
+
 	// Create KeyMap object
-	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides)
+	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides, volumeController)
 	if err != nil {
 		slog.Error("Failed to initialize virtual keyboard", "error", err)
 		return err
@@ -139,6 +150,8 @@ power events (startup, shutdown, sleep, resume).`,
 	rootCmd.Flags().StringSlice("keymap", []string{}, "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
 	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Default to 0")
 	rootCmd.Flags().String("queue-dir", "", "Directory for event queue (defaults to temp directory)")
+	rootCmd.Flags().Bool("volume-enabled", true, "Enable volume control via CEC remote (default: true)")
+	rootCmd.Flags().Int("volume-step", 5, "Volume adjustment step percentage (default: 5)")
 
 	// Bind flags to viper
 	viper.BindPFlag("cec-adapter", rootCmd.Flags().Lookup("cec-adapter"))
@@ -149,6 +162,8 @@ power events (startup, shutdown, sleep, resume).`,
 	viper.BindPFlag("keymap", rootCmd.Flags().Lookup("keymap"))
 	viper.BindPFlag("devices", rootCmd.Flags().Lookup("devices"))
 	viper.BindPFlag("queue-dir", rootCmd.Flags().Lookup("queue-dir"))
+	viper.BindPFlag("volume-enabled", rootCmd.Flags().Lookup("volume-enabled"))
+	viper.BindPFlag("volume-step", rootCmd.Flags().Lookup("volume-step"))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

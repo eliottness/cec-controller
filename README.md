@@ -10,6 +10,7 @@ custom key mappings.
   presses from connected HDMI devices.
 - **Virtual keyboard emulation:** Maps CEC keys to Linux key codes and triggers key events
   using [micmonay/keybd_event](https://github.com/micmonay/keybd_event). (See default key map [here](keymap.go))
+- **Volume synchronization:** Control Linux system audio (volume up/down/mute) using TV remote volume buttons via PulseAudio/PipeWire.
 - **Customizable key mapping:** Override or extend the CEC→Linux key map via CLI flags.
 - **Power event hooks:** Responds to system startup, shutdown, sleep, and resume of the host machine and transmits
   corresponding CEC commands (e.g. "Power On", "Standby") to connected devices.
@@ -90,6 +91,12 @@ devices:
 - `--debug`  
   Enable debug logging.
 
+- `--volume-enabled`  
+  Enable volume control via CEC remote (default: true). When enabled, volume up/down/mute buttons on your TV remote will control the Linux system audio.
+
+- `--volume-step=<percent>`  
+  Volume adjustment step percentage (default: 5). Controls how much the volume changes with each press of volume up/down buttons.
+
 - `--keymap <cec>:<linux>`  
   Add or override CEC to Linux key mappings (repeat as needed). Example: `--keymap 1:105` maps CEC key `1` to Linux key
   code `105` (KEY_KP1). You can also specify modifier keys using `+`, e.g. `--keymap 1:29+105` maps CEC key `1` to Ctrl+KP1.
@@ -105,6 +112,20 @@ devices:
 
 - `--device-name`
   Device name to report to CEC network. Default is the hostname
+
+#### Example using volume control
+
+Volume control is enabled by default and works with PulseAudio or PipeWire. To adjust the volume step:
+
+```sh
+./cec-controller --volume-step 10
+```
+
+To disable volume control:
+
+```sh
+./cec-controller --volume-enabled=false
+```
 
 #### Example using custom key mappings
 

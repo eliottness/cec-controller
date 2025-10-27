@@ -21,6 +21,12 @@ no-power-events: false
 # Number of times to retry CEC connection on failure
 retries: 5
 
+# Enable volume control via CEC remote (default: true)
+volume-enabled: true
+
+# Volume adjustment step percentage (default: 5)
+volume-step: 5
+
 # Custom CEC-to-Linux key mapping
 # Format: map of CEC key code to Linux key code(s) separated by +
 # Example mappings for Steam Big Picture overlays:

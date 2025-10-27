@@ -37,6 +37,8 @@ func loadConfig() (*Config, error) {
 	cfg.Debug = viper.GetBool("debug")
 	cfg.NoPowerEvents = viper.GetBool("no-power-events")
 	cfg.ConnectionRetries = viper.GetInt("retries")
+	cfg.VolumeEnabled = viper.GetBool("volume-enabled")
+	cfg.VolumeStep = viper.GetInt("volume-step")
 
 	// Handle keymap overrides
 	if keyMapConfig := viper.Get("keymap"); keyMapConfig != nil {
@@ -105,6 +107,10 @@ func loadConfig() (*Config, error) {
 		if cfg.QueueDir, err = os.MkdirTemp("", "cec-queue-*"); err != nil {
 			return nil, err
 		}
+	}
+	// Set default for volume step if not specified
+	if cfg.VolumeStep == 0 {
+		cfg.VolumeStep = 5
 	}
 
 	return cfg, nil

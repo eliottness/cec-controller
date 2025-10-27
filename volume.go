@@ -90,17 +90,22 @@ func (vc *PulseAudioVolumeController) GetVolume() (int, error) {
 	// Parse output like: "Volume: front-left: 65536 / 100% / 0.00 dB,   front-right: 65536 / 100% / 0.00 dB"
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "Volume:") {
-			// Extract the first percentage value
-			parts := strings.Split(line, "/")
-			if len(parts) >= 2 {
-				percentStr := strings.TrimSpace(parts[1])
-				percentStr = strings.TrimSuffix(percentStr, "%")
-				percent, err := strconv.Atoi(percentStr)
-				if err == nil {
-					return percent, nil
-				}
+		if !strings.HasPrefix(strings.TrimSpace(line), "Volume:") {
+			continue
+		}
+		// Extract the first percentage value
+		parts := strings.Split(line, "/")
+		if len(parts) >= 2 {
+			percentStr := strings.TrimSpace(parts[1])
+			percentStr = strings.TrimSuffix(percentStr, "%")
+			percent, err := strconv.Atoi(percentStr)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse volume percentage from '%s': %w", percentStr, err)
 			}
+			if percent < 0 || percent > 150 { // Allow some headroom but validate
+				return 0, fmt.Errorf("invalid volume percentage parsed: %d", percent)
+			}
+			return percent, nil
 		}
 	}
 	return 0, fmt.Errorf("could not parse volume from output: %s", string(output))
@@ -116,8 +121,10 @@ func (vc *PulseAudioVolumeController) IsMuted() (bool, error) {
 
 	// Parse output like: "Mute: yes" or "Mute: no"
 	outputStr := strings.TrimSpace(string(output))
-	if strings.Contains(outputStr, "yes") {
+	if strings.HasPrefix(outputStr, "Mute: yes") {
 		return true, nil
+	} else if strings.HasPrefix(outputStr, "Mute: no") {
+		return false, nil
 	}
-	return false, nil
+	return false, fmt.Errorf("unexpected mute state format: %s", outputStr)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -42,7 +43,7 @@ func (m *MockVolumeController) Mute() error {
 
 func (m *MockVolumeController) SetVolume(percent int) error {
 	if percent < 0 || percent > 100 {
-		return nil
+		return fmt.Errorf("invalid volume percentage: %d", percent)
 	}
 	m.volume = percent
 	return nil

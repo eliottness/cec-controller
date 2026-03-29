@@ -140,9 +140,9 @@ func TestMockCECConnection_CustomFunctions(t *testing.T) {
 	powerOnCalled, standbyCalled, closeCalled := false, false, false
 
 	mock := &MockCECConnection{
-		PowerOnFunc:  func(address int) error { powerOnCalled = true; return nil },
-		StandbyFunc:  func(address int) error { standbyCalled = true; return errors.New("standby failed") },
-		CloseFunc:    func() { closeCalled = true },
+		PowerOnFunc: func(address int) error { powerOnCalled = true; return nil },
+		StandbyFunc: func(address int) error { standbyCalled = true; return errors.New("standby failed") },
+		CloseFunc:   func() { closeCalled = true },
 	}
 
 	mock.PowerOn(5)

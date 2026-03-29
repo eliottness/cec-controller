@@ -92,6 +92,11 @@ jobs:
         with:
           go-version: stable
 
+      - name: Install libcec runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libcec6
+
       - name: Download amd64 binary
         uses: actions/download-artifact@v4
         with:

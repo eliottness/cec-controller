@@ -20,7 +20,10 @@ custom key mappings.
 - **Customizable key mapping:** Override or extend the CEC→Linux key map via CLI flags.
 - **Power event hooks:** Responds to system startup, shutdown, sleep, and resume of the host machine and transmits
   corresponding CEC commands (e.g. "Power On", "Standby") to connected devices.
+- **Active source switching:** Optionally claims the active HDMI source on startup so the TV switches input to this device automatically.
+- **Shutdown protection:** Holds a systemd-logind delay inhibitor lock while sending CEC standby commands, ensuring the system waits for CEC to complete before sleeping or shutting down.
 - **Systemd-ready:** Includes a sample systemd service file for robust startup and integration.
+- **Man pages:** Installs a man page (`man cec-controller`) when installed via `.deb` or `.rpm` package.
 
 ## Installation
 
@@ -126,6 +129,13 @@ devices:
 - `--device-name`
   Device name to report to the CEC network. Default is the hostname.
 
+- `--set-active-source`
+  Claim the active HDMI source on startup, causing the TV to switch its input to this device.
+
+- `--active-source-type`
+  CEC device type to report when claiming active source. Default is `4` (Playback Device, suitable for PCs).
+  Accepted values: `0`=TV, `1`=Recording, `3`=Tuner, `4`=Playback, `5`=AudioSystem.
+
 #### Example using custom key mappings
 
 Key mapping data for CEC can be found [here](https://github.com/claes/cec/blob/6db0712de894ea0c026b023b02181fee00babd39/cec.go#L147)
@@ -163,6 +173,8 @@ This app detects and reacts to:
 - **Startup:** Powers on connected devices when the service starts alongside systemd
 - **Shutdown:** Puts connected devices to standby on system shutdown/reboot
 - **Sleep/Resume:** Puts devices to standby on suspend, powers them on again on resume
+
+Before putting devices to standby, cec-controller acquires a systemd-logind [delay inhibitor lock](https://systemd.io/INHIBITOR_LOCKS/) for `sleep` and `shutdown`. This guarantees the CEC standby command completes before the system proceeds, preventing TVs and receivers from being left powered on after the host sleeps.
 
 ## Contributing
 

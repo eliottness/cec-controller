@@ -59,6 +59,9 @@ jobs:
       - name: install dependencies
         run: |
           sudo dpkg --add-architecture arm64
+          # Restrict existing sources to amd64 only, then add ports.ubuntu.com for arm64
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          printf 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse\ndeb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse\ndeb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse\n' | sudo tee /etc/apt/sources.list.d/arm64-ports.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libcec-dev libp8-platform-dev \

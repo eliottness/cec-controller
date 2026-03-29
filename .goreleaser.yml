@@ -3,6 +3,7 @@ project_name: cec-controller
 
 builds:
   - id: amd64
+    gobinary: scripts/use-prebuilt.sh
     main: .
     binary: cec-controller
     goos: [linux]
@@ -11,11 +12,27 @@ builds:
       - CGO_ENABLED=1
     ldflags: -s -w
 
+  - id: arm64
+    gobinary: scripts/use-prebuilt.sh
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
 nfpms:
   # Ubuntu/Debian packages
   - id: ubuntu-deb
     ids:
       - amd64
+      - arm64
     description: "CEC Controller Service"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
@@ -36,6 +53,7 @@ nfpms:
   - id: fedora-rpm
     ids:
       - amd64
+      - arm64
     description: "CEC Controller Service for Fedora/RHEL"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"

@@ -2,6 +2,7 @@ cec-controller
 coverage.out
 *.test
 dist/
+prebuilt/
 *.deb
 *.rpm
 pkg-*

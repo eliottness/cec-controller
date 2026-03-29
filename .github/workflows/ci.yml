@@ -32,12 +32,54 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcec-dev libp8-platform-dev
 
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run vet
+        run: CGO_ENABLED=1 go vet ./...
+
       - name: Run tests
         run: CGO_ENABLED=1 go test -v ./...
 
-  release:
-    name: build binaries
+  build:
+    name: Build (${{ matrix.goarch }})
     needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goarch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libcec-dev libp8-platform-dev
+
+      - name: Build binary
+        run: |
+          mkdir -p prebuilt/${{ matrix.goarch }}
+          CGO_ENABLED=1 go build -ldflags="-s -w" -o prebuilt/${{ matrix.goarch }}/cec-controller .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-${{ matrix.goarch }}
+          path: prebuilt/${{ matrix.goarch }}/cec-controller
+
+  release:
+    name: Package and release
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -48,12 +90,22 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-            go-version: stable
+          go-version: stable
 
-      - name: install dependencies
-        run: | 
-          sudo apt update
-          sudo apt install -y --no-install-recommends libcec-dev libp8-platform-dev
+      - name: Download amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-amd64
+          path: prebuilt/amd64/
+
+      - name: Download arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-arm64
+          path: prebuilt/arm64/
+
+      - name: Make binaries executable
+        run: find prebuilt -type f -name cec-controller -exec chmod +x {} \;
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
@@ -73,7 +125,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Upload binaries
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist

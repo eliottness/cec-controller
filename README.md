@@ -4,6 +4,13 @@ CEC Controller is a Linux CLI application that listens for HDMI-CEC key events a
 keyboard actions. It also reacts to system power events (startup, shutdown, sleep, resume) and can be configured for
 custom key mappings.
 
+> [!WARNING]
+> **This project requires libcec-compatible hardware.** You need a physical HDMI-CEC adapter recognised by
+> [libcec](https://libcec.pulse-eight.com/) — the most common option is the
+> [Pulse-Eight USB–CEC Adapter](https://www.pulse-eight.com/p/104/usb-hdmi-cec-adapter). Some Raspberry Pi models
+> expose a built-in CEC interface (`/dev/ttyAMA0`). Without compatible hardware the daemon will fail to open the
+> adapter and exit immediately.
+
 ## Features
 
 - **HDMI-CEC key listening:** Uses [libcec](https://libcec.pulse-eight.com/) via Go bindings to receive remote key
@@ -24,18 +31,28 @@ custom key mappings.
 
 Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page:
 
-**Ubuntu/Debian:**
+**Ubuntu/Debian (amd64):**
 ```sh
-# Download and install the .deb package
 wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_amd64.deb
 sudo dpkg -i cec-controller_<version>_ubuntu_amd64.deb
 ```
 
-**Fedora/RHEL:**
+**Ubuntu/Debian (arm64):**
 ```sh
-# Download and install the .rpm package
-wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller-<version>-1.<dist>.x86_64.rpm
-sudo dnf install cec-controller-<version>-1.<dist>.x86_64.rpm
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_arm64.deb
+sudo dpkg -i cec-controller_<version>_ubuntu_arm64.deb
+```
+
+**Fedora/RHEL (amd64):**
+```sh
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_amd64.rpm
+sudo dnf install cec-controller_<version>_fedora_amd64.rpm
+```
+
+**Fedora/RHEL (arm64):**
+```sh
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_arm64.rpm
+sudo dnf install cec-controller_<version>_fedora_arm64.rpm
 ```
 
 ### From Source
@@ -51,7 +68,7 @@ sudo dnf install cec-controller-<version>-1.<dist>.x86_64.rpm
 Requires `libcec-dev` and `libp8-platform-dev` on debian-based systems or just `libcec-devel` on fedora-based systems:
 
 ```sh
-go build -o cec-controller main.go
+go build -o cec-controller .
 ```
 
 ## Usage
@@ -97,14 +114,17 @@ devices:
 - `--no-power-events`  
   Disable handling of system power events.
 
-- `--devices`  
-  Power event device logical addresses (e.g. --devices 0,1). Default to 0
+- `--devices`
+  Power event device logical addresses (e.g. --devices 0,1). Defaults to 0.
 
-- `--retries`  
-  Number of connection retries to the CEC adapter. Default is 5. Each try can take up to 10 seconds.
+- `--retries`
+  Number of times to retry opening the CEC adapter on failure. Default is 5. Each attempt may take up to 10 seconds.
+
+- `--restart-retries`
+  Maximum number of process restarts when the CEC library gets stuck. Default is 3. Set to 0 to disable restarts.
 
 - `--device-name`
-  Device name to report to CEC network. Default is the hostname
+  Device name to report to the CEC network. Default is the hostname.
 
 #### Example using custom key mappings
 
@@ -140,19 +160,46 @@ WantedBy=multi-user.target
 
 This app detects and reacts to:
 
-- **Startup:** Emitted when the service starts alongside systemd
-- **Shutdown:** On system shutdown/reboot
-- **Sleep/Resume:** On suspend/resume events
-
-You can customize hooks for these events in your code.
+- **Startup:** Powers on connected devices when the service starts alongside systemd
+- **Shutdown:** Puts connected devices to standby on system shutdown/reboot
+- **Sleep/Resume:** Puts devices to standby on suspend, powers them on again on resume
 
 ## Contributing
 
-PRs and issues are welcome! Please ensure code is formatted (`go fmt`) and tested.
+PRs and issues are welcome!
+
+### Running tests locally
+
+```sh
+# Install build dependencies (Ubuntu/Debian)
+sudo apt-get install -y libcec-dev libp8-platform-dev
+
+CGO_ENABLED=1 go test ./...
+```
+
+### Before submitting a PR
+
+```sh
+# Formatting (CI enforces this)
+gofmt -l .        # should print nothing
+gofmt -w .        # fix in place
+
+# Vet
+CGO_ENABLED=1 go vet ./...
+```
+
+CI will run `gofmt`, `go vet`, and `go test` automatically on every PR, then build binaries for amd64 and arm64.
 
 ## Releases
 
-This project uses automated CI/CD workflows to build and release binaries for multiple platforms. See [RELEASE.md](RELEASE.md) for details on the release process.
+Releases are automated via GitHub Actions. Push a semver tag to trigger a build:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The pipeline builds native binaries on `ubuntu-latest` (amd64) and `ubuntu-24.04-arm` (arm64), then packages them with goreleaser into `.tar.gz`, `.deb`, and `.rpm` artifacts published to the [Releases](https://github.com/eliottness/cec-controller/releases) page.
 
 ## License
 

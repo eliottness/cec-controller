@@ -3,20 +3,24 @@ project_name: cec-controller
 
 builds:
   - id: amd64
-    builder: prebuilt
+    gobinary: scripts/use-prebuilt.sh
+    main: .
     binary: cec-controller
     goos: [linux]
     goarch: [amd64]
-    prebuilt:
-      path: prebuilt/amd64/cec-controller
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
 
   - id: arm64
-    builder: prebuilt
+    gobinary: scripts/use-prebuilt.sh
+    main: .
     binary: cec-controller
     goos: [linux]
     goarch: [arm64]
-    prebuilt:
-      path: prebuilt/arm64/cec-controller
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
 
 archives:
   - id: default

@@ -22,32 +22,29 @@ const (
 func loadConfig() (*Config, error) {
 	cfg := &Config{}
 
-	// Set up viper to read from config file
 	viper.SetConfigFile(configFilePath)
 	viper.SetConfigType("yaml")
 
-	// Attempt to read config file (not an error if it doesn't exist)
 	if err := viper.ReadInConfig(); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			slog.Warn("Error reading config file", "path", configFilePath, "error", err)
 		}
 	}
 
-	// Read all config values with defaults
 	cfg.CECAdapter = viper.GetString("cec-adapter")
 	cfg.DeviceName = viper.GetString("device-name")
 	cfg.Debug = viper.GetBool("debug")
 	cfg.NoPowerEvents = viper.GetBool("no-power-events")
 	cfg.ConnectionRetries = viper.GetInt("retries")
+	cfg.SetActiveSource = viper.GetBool("set-active-source")
+	cfg.ActiveSourceDeviceType = viper.GetInt("active-source-type")
 
 	// Handle keymap overrides
 	if keyMapConfig := viper.Get("keymap"); keyMapConfig != nil {
 		switch v := keyMapConfig.(type) {
 		case map[string]interface{}:
-			// Handle map format: {"1": "29+2", "2": "29+3"}
 			cfg.KeyMapOverrides = parseKeyMapFromMap(v)
 		case []interface{}:
-			// Handle array format for backward compatibility: ["1:105", "2:106"]
 			var keyMapArgs []string
 			for _, item := range v {
 				if str, ok := item.(string); ok {
@@ -56,7 +53,6 @@ func loadConfig() (*Config, error) {
 			}
 			cfg.KeyMapOverrides = parseKeyMapFlags(keyMapArgs)
 		case []string:
-			// Handle string array for backward compatibility
 			cfg.KeyMapOverrides = parseKeyMapFlags(v)
 		}
 	}
@@ -84,12 +80,12 @@ func loadConfig() (*Config, error) {
 		}
 	}
 
-	// Handle queue directory from environment variable
+	// Queue directory: env var takes precedence (set by RestartProcess)
 	if cfg.QueueDir = os.Getenv(queueDirEnvVar); cfg.QueueDir == "" {
 		cfg.QueueDir = viper.GetString("queue-dir")
 	}
 
-	// Handle restart retries: env var takes precedence (set by previous process on restart)
+	// Restart retries: env var takes precedence (decremented by previous process on restart)
 	if retriesStr := os.Getenv(restartRetriesEnvVar); retriesStr != "" {
 		if retries, err := strconv.Atoi(retriesStr); err == nil {
 			cfg.RestartRetries = retries
@@ -123,6 +119,9 @@ func loadConfig() (*Config, error) {
 	if cfg.RestartRetries == 0 {
 		cfg.RestartRetries = 3
 	}
+	if cfg.ActiveSourceDeviceType == 0 {
+		cfg.ActiveSourceDeviceType = CECDeviceTypePlayback
+	}
 
 	return cfg, nil
 }
@@ -134,6 +133,14 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.RestartRetries < 0 {
 		return fmt.Errorf("--restart-retries must be non-negative (got %d)", cfg.RestartRetries)
+	}
+	validDeviceTypes := map[int]bool{
+		CECDeviceTypeTV: true, CECDeviceTypeRecording: true,
+		CECDeviceTypeTuner: true, CECDeviceTypePlayback: true,
+		CECDeviceTypeAudioSystem: true,
+	}
+	if !validDeviceTypes[cfg.ActiveSourceDeviceType] {
+		return fmt.Errorf("--active-source-type must be one of 0,1,3,4,5 (got %d)", cfg.ActiveSourceDeviceType)
 	}
 	return nil
 }
@@ -199,7 +206,7 @@ func parseKeyMapFlags(keyMapArgs []string) map[string][]int {
 
 func parseDevices(devices []string) []int {
 	if len(devices) == 0 {
-		return []int{0} // Default to device 0
+		return []int{0}
 	}
 	var result []int
 	for _, devStr := range devices {

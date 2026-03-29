@@ -9,19 +9,22 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	DeviceName        string
-	CECAdapter        string
-	Debug             bool
-	KeyMapOverrides   map[string][]int
-	NoPowerEvents     bool
-	PowerDevices      []int
-	ConnectionRetries int
-	QueueDir          string
-	RestartRetries    int
+	DeviceName             string
+	CECAdapter             string
+	Debug                  bool
+	KeyMapOverrides        map[string][]int
+	NoPowerEvents          bool
+	PowerDevices           []int
+	ConnectionRetries      int
+	QueueDir               string
+	RestartRetries         int
+	SetActiveSource        bool
+	ActiveSourceDeviceType int
 }
 
 func setupLogger(debug bool) {
@@ -43,7 +46,6 @@ func setupLogger(debug bool) {
 }
 
 func runController(cmd *cobra.Command, args []string) error {
-	// Load configuration from file first
 	cfg, err := loadConfig()
 	if err != nil {
 		slog.Error("Failed to load configuration", "error", err)
@@ -76,15 +78,31 @@ func runController(cmd *cobra.Command, args []string) error {
 	}
 	defer c.Close()
 
-	// Create KeyMap object
 	keyMapObj, err := NewKeyMap(cfg.KeyMapOverrides)
 	if err != nil {
 		slog.Error("Failed to initialize virtual keyboard", "error", err)
 		return err
 	}
 
+	// Claim active source on startup so the TV switches input to this device.
+	if cfg.SetActiveSource {
+		if !c.SetActiveSource(cfg.ActiveSourceDeviceType) {
+			slog.Warn("Failed to set active source on startup")
+		} else {
+			slog.Info("Active source set", "deviceType", cfg.ActiveSourceDeviceType)
+		}
+	}
+
+	// Open a D-Bus connection for logind inhibitor locks (sleep/shutdown protection).
+	// Non-fatal: if unavailable, CEC commands run without holding a delay lock.
+	var dbusConn, dbusErr = openSystemBus()
+	if dbusErr != nil {
+		slog.Warn("Failed to connect to D-Bus, inhibitor locks will be skipped", "error", dbusErr)
+		dbusConn = nil
+	}
+
 	if !cfg.NoPowerEvents {
-		// cec-controller just started alongside the system, so we assume the system has to be powered on
+		// Send an initial PowerOn so devices wake up when this service starts.
 		queue.InPowerEvents <- PowerEvent{Type: PowerOn, Active: true}
 		if err := PowerEventListener(ctx, queue.InPowerEvents); err != nil {
 			slog.Error("Failed to start power event listener", "error", err)
@@ -97,7 +115,6 @@ func runController(cmd *cobra.Command, args []string) error {
 		select {
 		case kp := <-queue.OutKeyEvents:
 			if kp == nil || kp.Duration != 0 {
-				// Ignore key release events
 				continue
 			}
 			keyMapObj.OnKeyPress(kp.KeyCode)
@@ -109,7 +126,14 @@ func runController(cmd *cobra.Command, args []string) error {
 				err = c.PowerOn(cfg.PowerDevices...)
 			case PowerSleep, PowerShutdown:
 				slog.Info("Putting devices to standby", "devices", cfg.PowerDevices)
+				// Hold a logind delay inhibitor so the system waits for CEC
+				// standby to complete before proceeding with sleep/shutdown.
+				lock, lockErr := acquireInhibitor(dbusConn, "sleep:shutdown", "Sending CEC standby command")
+				if lockErr != nil {
+					slog.Warn("Failed to acquire inhibitor lock", "error", lockErr)
+				}
 				err = c.Standby(cfg.PowerDevices...)
+				lock.Release()
 			}
 			if err != nil {
 				slog.Warn("Failed to send power command after connection reopen, libcec is weird so we need to restart the current process...")
@@ -136,18 +160,18 @@ power events (startup, shutdown, sleep, resume).`,
 		RunE: runController,
 	}
 
-	// Define flags that bind to viper config
 	rootCmd.Flags().String("cec-adapter", "", "CEC adapter path (leave empty for auto-detect)")
 	rootCmd.Flags().String("device-name", "", "Device name shown on your TV (leave empty for hostname)")
 	rootCmd.Flags().Bool("debug", false, "Enable debug output")
 	rootCmd.Flags().Bool("no-power-events", false, "Disable power event handling")
 	rootCmd.Flags().Int("retries", 5, "Number of times to retry opening the CEC adapter on failure (each attempt may take up to 10s)")
 	rootCmd.Flags().StringSlice("keymap", []string{}, "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
-	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Default to 0")
+	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Defaults to 0.")
 	rootCmd.Flags().String("queue-dir", "", "Directory for event queue (defaults to temp directory)")
 	rootCmd.Flags().Int("restart-retries", 3, "Maximum number of process restarts when the CEC library gets stuck (0 disables restart)")
+	rootCmd.Flags().Bool("set-active-source", false, "Claim active source on startup so the TV switches input to this device")
+	rootCmd.Flags().Int("active-source-type", CECDeviceTypePlayback, "CEC device type for active source claim (0=TV 1=Recording 3=Tuner 4=Playback 5=AudioSystem)")
 
-	// Bind flags to viper
 	mustBind := func(key, flag string) {
 		if err := viper.BindPFlag(key, rootCmd.Flags().Lookup(flag)); err != nil {
 			slog.Warn("Failed to bind flag", "key", key, "flag", flag, "error", err)
@@ -162,6 +186,31 @@ power events (startup, shutdown, sleep, resume).`,
 	mustBind("devices", "devices")
 	mustBind("queue-dir", "queue-dir")
 	mustBind("restart-retries", "restart-retries")
+	mustBind("set-active-source", "set-active-source")
+	mustBind("active-source-type", "active-source-type")
+
+	// Hidden subcommand to generate man pages into a target directory.
+	// Usage: cec-controller generate-docs --output-dir /usr/share/man/man1
+	var outputDir string
+	generateDocsCmd := &cobra.Command{
+		Use:    "generate-docs",
+		Short:  "Generate man pages for cec-controller",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := os.MkdirAll(outputDir, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %w", err)
+			}
+			header := &doc.GenManHeader{
+				Title:   "CEC-CONTROLLER",
+				Section: "1",
+				Source:  "cec-controller",
+				Manual:  "General Commands Manual",
+			}
+			return doc.GenManTree(rootCmd, header, outputDir)
+		},
+	}
+	generateDocsCmd.Flags().StringVar(&outputDir, "output-dir", ".", "Directory to write man pages into")
+	rootCmd.AddCommand(generateDocsCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

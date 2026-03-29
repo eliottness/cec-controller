@@ -107,6 +107,12 @@ jobs:
       - name: Make binaries executable
         run: find prebuilt -type f -name cec-controller -exec chmod +x {} \;
 
+      - name: Generate man pages
+        run: |
+          mkdir -p manpages
+          ./prebuilt/amd64/cec-controller generate-docs --output-dir ./manpages/
+          gzip -f ./manpages/cec-controller.1
+
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
         uses: goreleaser/goreleaser-action@v6

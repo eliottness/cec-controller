@@ -18,11 +18,24 @@ debug: false
 # Disable power event handling
 no-power-events: false
 
-# Number of times to retry CEC connection on failure
+# Number of times to retry opening the CEC adapter on failure.
+# Each attempt may take up to 10 seconds.
 retries: 5
 
+# Maximum number of process restarts when the CEC library gets stuck.
+# Set to 0 to disable automatic restarts.
+restart-retries: 3
+
+# Tell the TV to switch its input to this device on startup.
+# Requires the TV to support CEC active-source switching.
+set-active-source: false
+
+# CEC device type to report when claiming active source.
+# 0=TV, 1=Recording, 3=Tuner, 4=Playback (default, suitable for PCs), 5=AudioSystem
+active-source-type: 4
+
 # Custom CEC-to-Linux key mapping
-# Format: map of CEC key code to Linux key code(s) separated by +
+# Format: map of CEC key name to Linux key code(s) separated by +
 # Example mappings for Steam Big Picture overlays:
 # keymap:
 #   "1": "29+2"    # CEC key 1 -> Ctrl+1
@@ -35,5 +48,5 @@ keymap: {}
 devices: []
 
 # Directory for event queue (defaults to temp directory)
-# This is normally set via CEC_QUEUE_DIR environment variable
+# This is normally set via CEC_QUEUE_DIR environment variable on restart
 queue-dir: ""

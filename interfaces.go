@@ -12,6 +12,7 @@ import (
 type CECConnection interface {
 	PowerOn(address int) error
 	Standby(address int) error
+	SetActiveSource(deviceType int) bool
 	SetKeyPressesChan(ch chan *cec.KeyPress)
 	Close()
 }
@@ -35,6 +36,10 @@ func (w *CECConnectionWrapper) Standby(address int) error {
 		return fmt.Errorf("libcec Standby failed for address %d", address)
 	}
 	return nil
+}
+
+func (w *CECConnectionWrapper) SetActiveSource(deviceType int) bool {
+	return w.Connection.SetActiveSource(deviceType)
 }
 
 func (w *CECConnectionWrapper) SetKeyPressesChan(ch chan *cec.KeyPress) {

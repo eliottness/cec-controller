@@ -9,7 +9,6 @@ import (
 )
 
 func TestConfigLoading(t *testing.T) {
-	// Create a temporary config file
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "cec-controller.yaml")
 
@@ -26,12 +25,10 @@ devices:
   - "0"
   - "1"
 `
-
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write test config file: %v", err)
 	}
 
-	// Override the config file path for testing
 	viper.Reset()
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
@@ -40,26 +37,18 @@ devices:
 		t.Fatalf("Failed to read config: %v", err)
 	}
 
-	// Test basic string values
 	if adapter := viper.GetString("cec-adapter"); adapter != "/dev/ttyACM0" {
 		t.Errorf("Expected cec-adapter to be '/dev/ttyACM0', got '%s'", adapter)
 	}
-
 	if deviceName := viper.GetString("device-name"); deviceName != "TestDevice" {
 		t.Errorf("Expected device-name to be 'TestDevice', got '%s'", deviceName)
 	}
-
-	// Test boolean value
 	if debug := viper.GetBool("debug"); !debug {
 		t.Error("Expected debug to be true")
 	}
-
-	// Test integer value
 	if retries := viper.GetInt("retries"); retries != 10 {
 		t.Errorf("Expected retries to be 10, got %d", retries)
 	}
-
-	// Test map values
 	keymap := viper.GetStringMapString("keymap")
 	if len(keymap) != 2 {
 		t.Errorf("Expected 2 keymap entries, got %d", len(keymap))
@@ -76,46 +65,28 @@ func TestParseKeyMapFromMap(t *testing.T) {
 		expected map[string][]int
 	}{
 		{
-			name: "Single key mapping",
-			input: map[string]interface{}{
-				"1": "105",
-			},
-			expected: map[string][]int{
-				"1": {105},
-			},
+			name:     "Single key mapping",
+			input:    map[string]interface{}{"1": "105"},
+			expected: map[string][]int{"1": {105}},
 		},
 		{
-			name: "Multiple key codes",
-			input: map[string]interface{}{
-				"1": "29+105",
-			},
-			expected: map[string][]int{
-				"1": {29, 105},
-			},
+			name:     "Multiple key codes",
+			input:    map[string]interface{}{"1": "29+105"},
+			expected: map[string][]int{"1": {29, 105}},
 		},
 		{
-			name: "Multiple mappings",
-			input: map[string]interface{}{
-				"1": "105",
-				"2": "106",
-			},
-			expected: map[string][]int{
-				"1": {105},
-				"2": {106},
-			},
+			name:     "Multiple mappings",
+			input:    map[string]interface{}{"1": "105", "2": "106"},
+			expected: map[string][]int{"1": {105}, "2": {106}},
 		},
 		{
-			name: "Invalid value type",
-			input: map[string]interface{}{
-				"1": 105, // Should be string
-			},
+			name:     "Invalid value type",
+			input:    map[string]interface{}{"1": 105},
 			expected: map[string][]int{},
 		},
 		{
-			name: "Partially invalid codes skips entire entry",
-			input: map[string]interface{}{
-				"1": "29+abc+105",
-			},
+			name:     "Partially invalid codes skips entire entry",
+			input:    map[string]interface{}{"1": "29+abc+105"},
 			expected: map[string][]int{},
 		},
 	}
@@ -153,26 +124,19 @@ func TestParseKeyMapFlags(t *testing.T) {
 		expected map[string][]int
 	}{
 		{
-			name:  "Single key mapping",
-			input: []string{"1:105"},
-			expected: map[string][]int{
-				"1": {105},
-			},
+			name:     "Single key mapping",
+			input:    []string{"1:105"},
+			expected: map[string][]int{"1": {105}},
 		},
 		{
-			name:  "Multiple key codes",
-			input: []string{"1:29+105"},
-			expected: map[string][]int{
-				"1": {29, 105},
-			},
+			name:     "Multiple key codes",
+			input:    []string{"1:29+105"},
+			expected: map[string][]int{"1": {29, 105}},
 		},
 		{
-			name:  "Multiple mappings",
-			input: []string{"1:105", "2:106"},
-			expected: map[string][]int{
-				"1": {105},
-				"2": {106},
-			},
+			name:     "Multiple mappings",
+			input:    []string{"1:105", "2:106"},
+			expected: map[string][]int{"1": {105}, "2": {106}},
 		},
 		{
 			name:     "Invalid format",
@@ -218,31 +182,11 @@ func TestParseDevices(t *testing.T) {
 		input    []string
 		expected []int
 	}{
-		{
-			name:     "Empty input defaults to device 0",
-			input:    []string{},
-			expected: []int{0},
-		},
-		{
-			name:     "Single device",
-			input:    []string{"1"},
-			expected: []int{1},
-		},
-		{
-			name:     "Multiple devices in one string",
-			input:    []string{"0,1,2"},
-			expected: []int{0, 1, 2},
-		},
-		{
-			name:     "Multiple devices in separate strings",
-			input:    []string{"0", "1", "2"},
-			expected: []int{0, 1, 2},
-		},
-		{
-			name:     "Devices with spaces",
-			input:    []string{"0, 1, 2"},
-			expected: []int{0, 1, 2},
-		},
+		{"Empty input defaults to device 0", []string{}, []int{0}},
+		{"Single device", []string{"1"}, []int{1}},
+		{"Multiple devices in one string", []string{"0,1,2"}, []int{0, 1, 2}},
+		{"Multiple devices in separate strings", []string{"0", "1", "2"}, []int{0, 1, 2}},
+		{"Devices with spaces", []string{"0, 1, 2"}, []int{0, 1, 2}},
 	}
 
 	for _, tt := range tests {
@@ -265,10 +209,8 @@ func TestParseDevices(t *testing.T) {
 }
 
 func TestDefaultValues(t *testing.T) {
-	// Test with empty viper config
 	viper.Reset()
 
-	// Create a temporary directory for queue
 	tempDir := t.TempDir()
 	os.Setenv(queueDirEnvVar, tempDir)
 	defer os.Unsetenv(queueDirEnvVar)
@@ -278,25 +220,26 @@ func TestDefaultValues(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Check default values
 	if cfg.ConnectionRetries != 5 {
 		t.Errorf("Expected default retries to be 5, got %d", cfg.ConnectionRetries)
 	}
-
 	if cfg.DeviceName == "" {
 		t.Error("Expected device name to be set to hostname")
 	}
-
 	if cfg.NoPowerEvents || len(cfg.PowerDevices) != 1 || cfg.PowerDevices[0] != 0 {
-		t.Errorf("Expected NoPowerEvents to be false and PowerDevices to be [0], got NoPowerEvents=%v, PowerDevices=%v", cfg.NoPowerEvents, cfg.PowerDevices)
+		t.Errorf("Expected NoPowerEvents=false and PowerDevices=[0], got NoPowerEvents=%v, PowerDevices=%v", cfg.NoPowerEvents, cfg.PowerDevices)
 	}
-
 	if cfg.QueueDir != tempDir {
 		t.Errorf("Expected queue dir to be '%s', got '%s'", tempDir, cfg.QueueDir)
 	}
-
 	if cfg.RestartRetries != 3 {
 		t.Errorf("Expected default restart retries to be 3, got %d", cfg.RestartRetries)
+	}
+	if cfg.ActiveSourceDeviceType != CECDeviceTypePlayback {
+		t.Errorf("Expected default active source device type to be %d (Playback), got %d", CECDeviceTypePlayback, cfg.ActiveSourceDeviceType)
+	}
+	if cfg.SetActiveSource {
+		t.Error("Expected set-active-source to be false by default")
 	}
 }
 
@@ -305,7 +248,6 @@ func TestRestartRetriesFromEnvVar(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv(queueDirEnvVar, tempDir)
 	defer os.Unsetenv(queueDirEnvVar)
-
 	os.Setenv(restartRetriesEnvVar, "7")
 	defer os.Unsetenv(restartRetriesEnvVar)
 
@@ -313,8 +255,86 @@ func TestRestartRetriesFromEnvVar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
-
 	if cfg.RestartRetries != 7 {
 		t.Errorf("Expected RestartRetries to be 7 from env var, got %d", cfg.RestartRetries)
+	}
+}
+
+// TestExampleConfigFile verifies that the shipped example config file parses
+// cleanly and contains all known configuration keys, preventing silent drift.
+func TestExampleConfigFile(t *testing.T) {
+	viper.Reset()
+	viper.SetConfigFile("cec-controller.yaml.example")
+	viper.SetConfigType("yaml")
+
+	if err := viper.ReadInConfig(); err != nil {
+		t.Fatalf("Failed to read example config file: %v", err)
+	}
+
+	tempDir := t.TempDir()
+	os.Setenv(queueDirEnvVar, tempDir)
+	defer os.Unsetenv(queueDirEnvVar)
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig failed on example file: %v", err)
+	}
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("validateConfig failed on example file: %v", err)
+	}
+
+	// Verify all known keys are present in the example file so drift is caught.
+	knownKeys := []string{
+		"cec-adapter", "device-name", "debug", "no-power-events",
+		"retries", "restart-retries", "set-active-source", "active-source-type",
+		"keymap", "devices", "queue-dir",
+	}
+	for _, key := range knownKeys {
+		if !viper.IsSet(key) {
+			t.Errorf("Example config file is missing key %q — add it to cec-controller.yaml.example", key)
+		}
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr bool
+	}{
+		{
+			name:    "valid defaults",
+			cfg:     Config{ConnectionRetries: 5, RestartRetries: 3, ActiveSourceDeviceType: CECDeviceTypePlayback},
+			wantErr: false,
+		},
+		{
+			name:    "zero retries",
+			cfg:     Config{ConnectionRetries: 0, RestartRetries: 3, ActiveSourceDeviceType: CECDeviceTypePlayback},
+			wantErr: true,
+		},
+		{
+			name:    "negative restart retries",
+			cfg:     Config{ConnectionRetries: 5, RestartRetries: -1, ActiveSourceDeviceType: CECDeviceTypePlayback},
+			wantErr: true,
+		},
+		{
+			name:    "invalid device type",
+			cfg:     Config{ConnectionRetries: 5, RestartRetries: 3, ActiveSourceDeviceType: 9},
+			wantErr: true,
+		},
+		{
+			name:    "valid TV device type",
+			cfg:     Config{ConnectionRetries: 5, RestartRetries: 0, ActiveSourceDeviceType: CECDeviceTypeTV},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateConfig(&tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

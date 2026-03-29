@@ -8,6 +8,16 @@ import (
 	"github.com/claes/cec"
 )
 
+// CEC device type constants for SetActiveSource.
+// These correspond to the CEC logical device types defined in the spec.
+const (
+	CECDeviceTypeTV          = 0
+	CECDeviceTypeRecording   = 1
+	CECDeviceTypeTuner       = 3
+	CECDeviceTypePlayback    = 4 // most appropriate for a PC/media player
+	CECDeviceTypeAudioSystem = 5
+)
+
 type CEC struct {
 	adapter    string
 	retries    int
@@ -110,6 +120,14 @@ func (c *CEC) PowerOn(addresses ...int) error {
 
 func (c *CEC) Standby(addresses ...int) error {
 	return c.power(false, addresses...)
+}
+
+// SetActiveSource broadcasts to the CEC network that this device is the active
+// source, causing the TV to switch its input accordingly.
+func (c *CEC) SetActiveSource(deviceType int) bool {
+	c.connMu.RLock()
+	defer c.connMu.RUnlock()
+	return c.conn.SetActiveSource(deviceType)
 }
 
 func (c *CEC) Close() {

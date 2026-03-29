@@ -46,6 +46,8 @@ nfpms:
     contents:
       - src: ./cec-controller.service
         dst: /lib/systemd/system/cec-controller.service
+      - src: ./manpages/cec-controller.1.gz
+        dst: /usr/share/man/man1/cec-controller.1.gz
     dependencies:
       - libcec7
 
@@ -65,6 +67,8 @@ nfpms:
     contents:
       - src: ./cec-controller.service
         dst: /lib/systemd/system/cec-controller.service
+      - src: ./manpages/cec-controller.1.gz
+        dst: /usr/share/man/man1/cec-controller.1.gz
     dependencies:
       - libcec
 

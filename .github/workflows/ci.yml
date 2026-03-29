@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: prebuilt-${{ matrix.goarch }}
-          path: prebuilt/
+          path: prebuilt/${{ matrix.goarch }}/cec-controller
 
   release:
     name: Package and release
@@ -96,16 +96,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilt-amd64
-          path: prebuilt/
+          path: prebuilt/amd64/
 
       - name: Download arm64 binary
         uses: actions/download-artifact@v4
         with:
           name: prebuilt-arm64
-          path: prebuilt/
+          path: prebuilt/arm64/
 
       - name: Make binaries executable
-        run: chmod +x prebuilt/*/cec-controller
+        run: find prebuilt -type f -name cec-controller -exec chmod +x {} \;
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}

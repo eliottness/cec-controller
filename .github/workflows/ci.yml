@@ -32,6 +32,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcec-dev libp8-platform-dev
 
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run vet
+        run: CGO_ENABLED=1 go vet ./...
+
       - name: Run tests
         run: CGO_ENABLED=1 go test -v ./...
 
@@ -51,9 +57,13 @@ jobs:
             go-version: stable
 
       - name: install dependencies
-        run: | 
-          sudo apt update
-          sudo apt install -y --no-install-recommends libcec-dev libp8-platform-dev
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcec-dev libp8-platform-dev \
+            libcec-dev:arm64 libp8-platform-dev:arm64 \
+            gcc-aarch64-linux-gnu
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}

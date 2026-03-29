@@ -55,8 +55,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -68,27 +66,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libcec-dev libp8-platform-dev
 
-      - name: Build binary (Snapshot)
-        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: '~> v2'
-          args: build --single-target --snapshot
-
-      - name: Build binary (Release)
-        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: '~> v2'
-          args: build --single-target
+      - name: Build binary
+        run: |
+          mkdir -p prebuilt/${{ matrix.goarch }}
+          CGO_ENABLED=1 go build -ldflags="-s -w" -o prebuilt/${{ matrix.goarch }}/cec-controller .
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.goarch }}
-          path: dist/
+          name: prebuilt-${{ matrix.goarch }}
+          path: prebuilt/
 
   release:
     name: Package and release
@@ -108,17 +95,17 @@ jobs:
       - name: Download amd64 binary
         uses: actions/download-artifact@v4
         with:
-          name: dist-amd64
-          path: dist/
+          name: prebuilt-amd64
+          path: prebuilt/
 
       - name: Download arm64 binary
         uses: actions/download-artifact@v4
         with:
-          name: dist-arm64
-          path: dist/
+          name: prebuilt-arm64
+          path: prebuilt/
 
-      - name: Prepare dist for goreleaser
-        run: rm -f dist/artifacts.json dist/metadata.json dist/config.yaml
+      - name: Make binaries executable
+        run: chmod +x prebuilt/*/cec-controller
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
@@ -126,7 +113,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --skip=build --snapshot --skip=publish
+          args: release --snapshot --skip=publish
 
       - name: Run GoReleaser (Release)
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true') }}
@@ -134,11 +121,11 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --skip=build
+          args: release
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Upload binaries
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist

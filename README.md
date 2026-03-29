@@ -24,18 +24,28 @@ custom key mappings.
 
 Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page:
 
-**Ubuntu/Debian:**
+**Ubuntu/Debian (amd64):**
 ```sh
-# Download and install the .deb package
 wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_amd64.deb
 sudo dpkg -i cec-controller_<version>_ubuntu_amd64.deb
 ```
 
-**Fedora/RHEL:**
+**Ubuntu/Debian (arm64):**
 ```sh
-# Download and install the .rpm package
-wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller-<version>-1.<dist>.x86_64.rpm
-sudo dnf install cec-controller-<version>-1.<dist>.x86_64.rpm
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_arm64.deb
+sudo dpkg -i cec-controller_<version>_ubuntu_arm64.deb
+```
+
+**Fedora/RHEL (amd64):**
+```sh
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_amd64.rpm
+sudo dnf install cec-controller_<version>_fedora_amd64.rpm
+```
+
+**Fedora/RHEL (arm64):**
+```sh
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_arm64.rpm
+sudo dnf install cec-controller_<version>_fedora_arm64.rpm
 ```
 
 ### From Source
@@ -148,11 +158,40 @@ You can customize hooks for these events in your code.
 
 ## Contributing
 
-PRs and issues are welcome! Please ensure code is formatted (`go fmt`) and tested.
+PRs and issues are welcome!
+
+### Running tests locally
+
+```sh
+# Install build dependencies (Ubuntu/Debian)
+sudo apt-get install -y libcec-dev libp8-platform-dev
+
+CGO_ENABLED=1 go test ./...
+```
+
+### Before submitting a PR
+
+```sh
+# Formatting (CI enforces this)
+gofmt -l .        # should print nothing
+gofmt -w .        # fix in place
+
+# Vet
+CGO_ENABLED=1 go vet ./...
+```
+
+CI will run `gofmt`, `go vet`, and `go test` automatically on every PR, then build binaries for amd64 and arm64.
 
 ## Releases
 
-This project uses automated CI/CD workflows to build and release binaries for multiple platforms. See [RELEASE.md](RELEASE.md) for details on the release process.
+Releases are automated via GitHub Actions. Push a semver tag to trigger a build:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The pipeline builds native binaries on `ubuntu-latest` (amd64) and `ubuntu-24.04-arm` (arm64), then packages them with goreleaser into `.tar.gz`, `.deb`, and `.rpm` artifacts published to the [Releases](https://github.com/eliottness/cec-controller/releases) page.
 
 ## License
 

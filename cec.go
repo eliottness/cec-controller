@@ -15,30 +15,36 @@ type CEC struct {
 
 	conn      CECConnection
 	connMu    sync.RWMutex
-	cecOpener func(string, string) (*cec.Connection, error)
+	cecOpener func(string, string) (CECConnection, error)
 
 	keyPresses chan *cec.KeyPress
 }
 
 func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress) (*CEC, error) {
-	return newCECWithOpener(adapter, deviceName, connectionRetries, keyPresses, cec.Open)
+	return newCECWithOpener(adapter, deviceName, connectionRetries, keyPresses, func(adapter, deviceName string) (CECConnection, error) {
+		conn, err := cec.Open(adapter, deviceName)
+		if err != nil {
+			return nil, err
+		}
+		return &CECConnectionWrapper{Connection: conn}, nil
+	})
 }
 
-func newCECWithOpener(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, opener func(string, string) (*cec.Connection, error)) (*CEC, error) {
+func newCECWithOpener(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, opener func(string, string) (CECConnection, error)) (*CEC, error) {
 	if connectionRetries < 1 {
 		slog.Warn("Connection retries must be at least 1, setting to 1")
 		connectionRetries = 1
 	}
 
-	c, err := opener(adapter, deviceName)
+	conn, err := opener(adapter, deviceName)
 	if err != nil {
 		return nil, err
 	}
 
-	c.KeyPresses = keyPresses
+	conn.SetKeyPressesChan(keyPresses)
 
 	return &CEC{
-		conn:       &CECConnectionWrapper{Connection: c},
+		conn:       conn,
 		adapter:    adapter,
 		retries:    connectionRetries,
 		deviceName: deviceName,
@@ -64,7 +70,7 @@ func (c *CEC) reopen() error {
 		}
 
 		// Here we are literally hoping nobody reads this value concurrently we have no choice
-		c.conn = &CECConnectionWrapper{Connection: conn}
+		c.conn = conn
 		c.conn.SetKeyPressesChan(c.keyPresses)
 		slog.Info("CEC connection re-established")
 		return nil
@@ -73,39 +79,44 @@ func (c *CEC) reopen() error {
 	return fmt.Errorf("failed to open CEC connection after %d attempts", c.retries)
 }
 
-func (c *CEC) powerCall(powerFunc func(int) error, address int) error {
+// powerCall calls the appropriate power function while holding the read lock,
+// ensuring the connection is not replaced concurrently by reopen().
+func (c *CEC) powerCall(isPowerOn bool, address int) error {
 	c.connMu.RLock()
 	defer c.connMu.RUnlock()
-	return powerFunc(address)
+	if isPowerOn {
+		return c.conn.PowerOn(address)
+	}
+	return c.conn.Standby(address)
 }
 
-func (c *CEC) power(powerFunc func(int) error, addresses ...int) error {
+func (c *CEC) power(isPowerOn bool, addresses ...int) error {
 	for _, addr := range addresses {
-		if powerFunc(addr) == nil { // error values are inverted in this lib for this function
-			// Error is nil on failure
+		if err := c.powerCall(isPowerOn, addr); err != nil {
 			if err := c.reopen(); err != nil {
 				return err
 			}
-
-			if powerFunc(addr) == nil {
-				return fmt.Errorf("failed to send PowerOn to address %d after reopening connection", addr)
+			if err := c.powerCall(isPowerOn, addr); err != nil {
+				return fmt.Errorf("failed to send power command to address %d after reopening: %w", addr, err)
 			}
 		}
 	}
-
 	return nil
 }
 
 func (c *CEC) PowerOn(addresses ...int) error {
-	return c.power(c.conn.PowerOn, addresses...)
+	return c.power(true, addresses...)
 }
 
 func (c *CEC) Standby(addresses ...int) error {
-	return c.power(c.conn.Standby, addresses...)
+	return c.power(false, addresses...)
 }
 
 func (c *CEC) Close() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
 	if c.conn != nil {
 		c.conn.Close()
+		c.conn = nil
 	}
 }

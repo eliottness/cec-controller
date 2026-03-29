@@ -10,6 +10,7 @@ import (
 // KeyMap provides mapping from CEC key codes to Linux key codes and handles virtual key events.
 type KeyMap struct {
 	cecToLinux map[int][]int
+	emitter    KeyboardEmitter
 }
 
 var base = map[int]int{
@@ -46,15 +47,16 @@ var base = map[int]int{
 
 // NewKeyMap creates a KeyMap, optionally overriding defaults.
 func NewKeyMap(overrides map[string][]int) (*KeyMap, error) {
-	// Base map (can be extended)
+	return newKeyMapWithEmitter(overrides, &keybdEmitter{})
+}
 
-	var keyMap = make(map[int][]int, len(base)+len(overrides))
+func newKeyMapWithEmitter(overrides map[string][]int, emitter KeyboardEmitter) (*KeyMap, error) {
+	keyMap := make(map[int][]int, len(base)+len(overrides))
 
 	for k, v := range base {
 		keyMap[k] = []int{v}
 	}
 
-	// Apply overrides
 	for k, v := range overrides {
 		cecCode := cec.GetKeyCodeByName(k)
 		if cecCode == -1 {
@@ -68,6 +70,7 @@ func NewKeyMap(overrides map[string][]int) (*KeyMap, error) {
 
 	return &KeyMap{
 		cecToLinux: keyMap,
+		emitter:    emitter,
 	}, nil
 }
 
@@ -79,15 +82,8 @@ func (km *KeyMap) OnKeyPress(cecKeyCode int) {
 		return
 	}
 
-	kb, err := keybd.NewKeyBonding()
-	if err != nil {
-		slog.Error("Failed to create KeyBonding", "error", err)
-		return
-	}
-
 	slog.Debug("Sending virtual key event", "cec-key-code", cecKeyCode, "linux-key-code", linuxKeyCode)
-	kb.SetKeys(linuxKeyCode...)
-	if err := kb.Launching(); err != nil {
+	if err := km.emitter.Emit(linuxKeyCode); err != nil {
 		slog.Error("Failed to send key event", "error", err)
 	}
 }

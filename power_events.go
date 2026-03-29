@@ -34,12 +34,14 @@ func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
 		dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
 		dbus.WithMatchMember("PrepareForSleep"),
 	); err != nil {
+		conn.Close()
 		return fmt.Errorf("failed to add match for sleep signals: %w", err)
 	}
 	if err := conn.AddMatchSignal(dbus.WithMatchSender("org.freedesktop.login1"),
 		dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
 		dbus.WithMatchMember("PrepareForShutdown"),
 	); err != nil {
+		conn.Close()
 		return fmt.Errorf("failed to add match for shutdown signals: %w", err)
 	}
 
@@ -47,6 +49,7 @@ func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
 	conn.Signal(signalCh)
 
 	go func() {
+		defer conn.Close()
 		for {
 			select {
 			case sig := <-signalCh:
@@ -63,10 +66,18 @@ func PowerEventListener(ctx context.Context, events chan<- PowerEvent) error {
 					if active {
 						evType = PowerSleep
 					}
-					events <- PowerEvent{Type: evType, Active: active}
+					select {
+					case events <- PowerEvent{Type: evType, Active: active}:
+					default:
+						slog.Warn("Power event channel full, dropping sleep event", "type", evType)
+					}
 					slog.Debug("Power event", "type", evType, "active", active)
 				case "org.freedesktop.login1.Manager.PrepareForShutdown":
-					events <- PowerEvent{Type: PowerShutdown, Active: active}
+					select {
+					case events <- PowerEvent{Type: PowerShutdown, Active: active}:
+					default:
+						slog.Warn("Power event channel full, dropping shutdown event")
+					}
 					slog.Debug("Power event", "type", PowerShutdown, "active", active)
 				}
 			case <-ctx.Done():

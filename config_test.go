@@ -111,6 +111,13 @@ func TestParseKeyMapFromMap(t *testing.T) {
 			},
 			expected: map[string][]int{},
 		},
+		{
+			name: "Partially invalid codes skips entire entry",
+			input: map[string]interface{}{
+				"1": "29+abc+105",
+			},
+			expected: map[string][]int{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -170,6 +177,11 @@ func TestParseKeyMapFlags(t *testing.T) {
 		{
 			name:     "Invalid format",
 			input:    []string{"invalid"},
+			expected: map[string][]int{},
+		},
+		{
+			name:     "Partially invalid codes skips entire entry",
+			input:    []string{"1:29+abc+105"},
 			expected: map[string][]int{},
 		},
 	}
@@ -281,5 +293,28 @@ func TestDefaultValues(t *testing.T) {
 
 	if cfg.QueueDir != tempDir {
 		t.Errorf("Expected queue dir to be '%s', got '%s'", tempDir, cfg.QueueDir)
+	}
+
+	if cfg.RestartRetries != 3 {
+		t.Errorf("Expected default restart retries to be 3, got %d", cfg.RestartRetries)
+	}
+}
+
+func TestRestartRetriesFromEnvVar(t *testing.T) {
+	viper.Reset()
+	tempDir := t.TempDir()
+	os.Setenv(queueDirEnvVar, tempDir)
+	defer os.Unsetenv(queueDirEnvVar)
+
+	os.Setenv(restartRetriesEnvVar, "7")
+	defer os.Unsetenv(restartRetriesEnvVar)
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if cfg.RestartRetries != 7 {
+		t.Errorf("Expected RestartRetries to be 7 from env var, got %d", cfg.RestartRetries)
 	}
 }

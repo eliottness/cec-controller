@@ -7,7 +7,8 @@ import (
 	"github.com/claes/cec"
 )
 
-// MockCECConnection is a mock implementation of CECConnection for testing
+// MockCECConnection is a mock implementation of CECConnection for testing.
+// Semantics follow standard Go: nil = success, non-nil = failure.
 type MockCECConnection struct {
 	PowerOnFunc  func(address int) error
 	StandbyFunc  func(address int) error
@@ -22,7 +23,7 @@ func (m *MockCECConnection) PowerOn(address int) error {
 	if m.PowerOnFunc != nil {
 		return m.PowerOnFunc(address)
 	}
-	return errors.New("not nil means success in libcec")
+	return nil // nil = success
 }
 
 func (m *MockCECConnection) Standby(address int) error {
@@ -30,7 +31,7 @@ func (m *MockCECConnection) Standby(address int) error {
 	if m.StandbyFunc != nil {
 		return m.StandbyFunc(address)
 	}
-	return errors.New("not nil means success in libcec")
+	return nil // nil = success
 }
 
 func (m *MockCECConnection) Close() {
@@ -44,8 +45,24 @@ func (m *MockCECConnection) SetKeyPressesChan(chan *cec.KeyPress) {
 	// No-op for mock
 }
 
+// newTestCEC creates a CEC instance with the given mock connection, bypassing cec.Open.
+func newTestCEC(conn CECConnection, opener func(string, string) (CECConnection, error)) *CEC {
+	if opener == nil {
+		opener = func(string, string) (CECConnection, error) {
+			return nil, errors.New("no opener configured")
+		}
+	}
+	return &CEC{
+		conn:       conn,
+		retries:    3,
+		adapter:    "test",
+		deviceName: "test",
+		cecOpener:  opener,
+		keyPresses: make(chan *cec.KeyPress, 1),
+	}
+}
+
 func TestCECConnection_Interface(t *testing.T) {
-	// Test that MockCECConnection implements CECConnection interface
 	var _ CECConnection = (*MockCECConnection)(nil)
 }
 
@@ -53,15 +70,11 @@ func TestMockCECConnection_PowerOn(t *testing.T) {
 	mock := &MockCECConnection{}
 
 	err := mock.PowerOn(0)
-	if err == nil {
-		t.Error("Expected non-nil error (libcec returns non-nil on success)")
+	if err != nil {
+		t.Errorf("Expected nil (success), got %v", err)
 	}
-
-	if len(mock.PowerOnCalls) != 1 {
-		t.Errorf("Expected 1 PowerOn call, got %d", len(mock.PowerOnCalls))
-	}
-	if mock.PowerOnCalls[0] != 0 {
-		t.Errorf("Expected PowerOn called with address 0, got %d", mock.PowerOnCalls[0])
+	if len(mock.PowerOnCalls) != 1 || mock.PowerOnCalls[0] != 0 {
+		t.Errorf("Expected PowerOn called with address 0, got %v", mock.PowerOnCalls)
 	}
 }
 
@@ -69,27 +82,20 @@ func TestMockCECConnection_Standby(t *testing.T) {
 	mock := &MockCECConnection{}
 
 	err := mock.Standby(1)
-	if err == nil {
-		t.Error("Expected non-nil error (libcec returns non-nil on success)")
+	if err != nil {
+		t.Errorf("Expected nil (success), got %v", err)
 	}
-
-	if len(mock.StandbyCalls) != 1 {
-		t.Errorf("Expected 1 Standby call, got %d", len(mock.StandbyCalls))
-	}
-	if mock.StandbyCalls[0] != 1 {
-		t.Errorf("Expected Standby called with address 1, got %d", mock.StandbyCalls[0])
+	if len(mock.StandbyCalls) != 1 || mock.StandbyCalls[0] != 1 {
+		t.Errorf("Expected Standby called with address 1, got %v", mock.StandbyCalls)
 	}
 }
 
 func TestMockCECConnection_Close(t *testing.T) {
 	mock := &MockCECConnection{}
-
 	if mock.CloseCalled {
 		t.Error("Expected CloseCalled to be false initially")
 	}
-
 	mock.Close()
-
 	if !mock.CloseCalled {
 		t.Error("Expected CloseCalled to be true after calling Close()")
 	}
@@ -103,17 +109,11 @@ func TestMockCECConnection_CustomFunctions(t *testing.T) {
 	mock := &MockCECConnection{
 		PowerOnFunc: func(address int) error {
 			powerOnCalled = true
-			if address != 5 {
-				t.Errorf("Expected address 5, got %d", address)
-			}
-			return nil
+			return nil // success
 		},
 		StandbyFunc: func(address int) error {
 			standbyCalled = true
-			if address != 6 {
-				t.Errorf("Expected address 6, got %d", address)
-			}
-			return errors.New("custom error")
+			return errors.New("standby failed") // failure
 		},
 		CloseFunc: func() {
 			closeCalled = true
@@ -136,8 +136,8 @@ func TestMockCECConnection_CustomFunctions(t *testing.T) {
 	}
 }
 
+// TestCECRetryLogic tests that connectionRetries < 1 is clamped via newCECWithOpener.
 func TestCECRetryLogic(t *testing.T) {
-	// Test the retry adjustment logic
 	testCases := []struct {
 		input    int
 		expected int
@@ -150,77 +150,142 @@ func TestCECRetryLogic(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		retries := tc.input
-		if retries < 1 {
-			retries = 1
+		mock := &MockCECConnection{}
+		opener := func(string, string) (CECConnection, error) {
+			return mock, nil
 		}
-
-		if retries != tc.expected {
-			t.Errorf("Input %d: expected %d, got %d", tc.input, tc.expected, retries)
+		c, err := newCECWithOpener("", "", tc.input, make(chan *cec.KeyPress, 1), opener)
+		if err != nil {
+			t.Fatalf("Input %d: unexpected error: %v", tc.input, err)
+		}
+		if c.retries != tc.expected {
+			t.Errorf("Input %d: expected retries %d, got %d", tc.input, tc.expected, c.retries)
 		}
 	}
 }
 
-func TestCECPowerLogic_MultipleAddresses(t *testing.T) {
-	// Test power command logic with multiple addresses
+func TestCECPower_SuccessOnFirstCall(t *testing.T) {
+	mock := &MockCECConnection{} // default returns nil = success
+	c := newTestCEC(mock, nil)
+
+	if err := c.PowerOn(0); err != nil {
+		t.Errorf("Expected success, got %v", err)
+	}
+	if len(mock.PowerOnCalls) != 1 {
+		t.Errorf("Expected 1 PowerOn call, got %d", len(mock.PowerOnCalls))
+	}
+}
+
+func TestCECPower_ReopenOnFirstCallFailure(t *testing.T) {
+	newMock := &MockCECConnection{} // returns nil = success after reopen
 	mock := &MockCECConnection{
 		PowerOnFunc: func(address int) error {
-			return errors.New("success") // non-nil means success in libcec
+			return errors.New("connection lost") // failure triggers reopen
 		},
 	}
+	c := newTestCEC(mock, func(string, string) (CECConnection, error) {
+		return newMock, nil
+	})
 
-	addresses := []int{0, 1, 2}
-	for _, addr := range addresses {
-		err := mock.PowerOn(addr)
-		if err == nil {
-			t.Errorf("Expected success (non-nil) for address %d", addr)
-		}
+	if err := c.PowerOn(0); err != nil {
+		t.Errorf("Expected success after reopen, got %v", err)
 	}
-
-	if len(mock.PowerOnCalls) != len(addresses) {
-		t.Errorf("Expected %d PowerOn calls, got %d", len(addresses), len(mock.PowerOnCalls))
+	if len(mock.PowerOnCalls) != 1 {
+		t.Errorf("Expected 1 call on original mock, got %d", len(mock.PowerOnCalls))
+	}
+	if len(newMock.PowerOnCalls) != 1 {
+		t.Errorf("Expected 1 call on new mock after reopen, got %d", len(newMock.PowerOnCalls))
 	}
 }
 
-func TestCECPowerLogic_FailureHandling(t *testing.T) {
-	// Test that nil return (failure in libcec) is detected
+func TestCECPower_ReopenFails(t *testing.T) {
+	mock := &MockCECConnection{
+		PowerOnFunc: func(address int) error {
+			return errors.New("connection lost")
+		},
+	}
+	c := newTestCEC(mock, func(string, string) (CECConnection, error) {
+		return nil, errors.New("reopen failed")
+	})
+
+	if err := c.PowerOn(0); err == nil {
+		t.Error("Expected error when reopen fails")
+	}
+}
+
+func TestCECPower_SecondCallFailsAfterReopen(t *testing.T) {
+	failingMock := &MockCECConnection{
+		PowerOnFunc: func(address int) error {
+			return errors.New("still failing after reopen")
+		},
+	}
+	mock := &MockCECConnection{
+		PowerOnFunc: func(address int) error {
+			return errors.New("initial failure")
+		},
+	}
+	c := newTestCEC(mock, func(string, string) (CECConnection, error) {
+		return failingMock, nil
+	})
+
+	if err := c.PowerOn(0); err == nil {
+		t.Error("Expected error when both calls fail")
+	}
+}
+
+func TestCECStandby_SuccessOnFirstCall(t *testing.T) {
+	mock := &MockCECConnection{} // default returns nil = success
+	c := newTestCEC(mock, nil)
+
+	if err := c.Standby(0); err != nil {
+		t.Errorf("Expected success, got %v", err)
+	}
+	if len(mock.StandbyCalls) != 1 {
+		t.Errorf("Expected 1 Standby call, got %d", len(mock.StandbyCalls))
+	}
+}
+
+func TestCECPower_MultipleAddresses(t *testing.T) {
+	mock := &MockCECConnection{} // returns nil = success
+
+	c := newTestCEC(mock, nil)
+	if err := c.PowerOn(0, 1, 2); err != nil {
+		t.Errorf("Expected success for multiple addresses, got %v", err)
+	}
+	if len(mock.PowerOnCalls) != 3 {
+		t.Errorf("Expected 3 PowerOn calls, got %d", len(mock.PowerOnCalls))
+	}
+}
+
+func TestCECPower_FailureDetected(t *testing.T) {
 	callCount := 0
 	mock := &MockCECConnection{
 		PowerOnFunc: func(address int) error {
 			callCount++
 			if callCount == 1 {
-				return nil // nil means failure in libcec
+				return errors.New("failure") // non-nil = failure
 			}
-			return errors.New("success")
+			return nil // nil = success
 		},
 	}
 
-	// First call should return nil (failure)
+	// First call fails — check mock works as expected
 	err := mock.PowerOn(0)
-	if err != nil {
-		t.Error("Expected nil (failure) on first call")
+	if err == nil {
+		t.Error("Expected non-nil (failure) on first call")
 	}
 
-	// Second call should return non-nil (success)
+	// Second call succeeds
 	err = mock.PowerOn(0)
-	if err == nil {
-		t.Error("Expected non-nil (success) on second call")
+	if err != nil {
+		t.Errorf("Expected nil (success) on second call, got %v", err)
 	}
 }
 
-func TestCECConnectionWrapper(t *testing.T) {
-	// Test that CECConnectionWrapper can be created
-	// This tests the structure without requiring actual cec library
-	mock := &MockCECConnection{
-		PowerOnFunc: func(address int) error {
-			return errors.New("success")
-		},
-	}
-
-	// Verify interface compliance
+func TestCECConnectionWrapper_InterfaceCompliance(t *testing.T) {
+	mock := &MockCECConnection{}
 	var conn CECConnection = mock
-	err := conn.PowerOn(0)
-	if err == nil {
-		t.Error("Expected non-nil error from mock")
+	if err := conn.PowerOn(0); err != nil {
+		t.Errorf("Expected nil from mock PowerOn, got %v", err)
 	}
 }

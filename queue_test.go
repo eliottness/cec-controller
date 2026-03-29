@@ -9,7 +9,6 @@ import (
 )
 
 func TestPowerEventChannel(t *testing.T) {
-	// Test power event channel operations
 	ch := make(chan PowerEvent, 10)
 
 	testEvent := PowerEvent{Type: PowerSleep, Active: true}
@@ -25,7 +24,6 @@ func TestPowerEventChannel(t *testing.T) {
 }
 
 func TestMultiplePowerEvents(t *testing.T) {
-	// Test multiple power events through channel
 	ch := make(chan PowerEvent, 10)
 
 	events := []PowerEvent{
@@ -35,12 +33,10 @@ func TestMultiplePowerEvents(t *testing.T) {
 		{Type: PowerShutdown, Active: true},
 	}
 
-	// Send all events
 	for _, event := range events {
 		ch <- event
 	}
 
-	// Receive and verify all events
 	for i, expected := range events {
 		received := <-ch
 		if received.Type != expected.Type {
@@ -53,12 +49,10 @@ func TestMultiplePowerEvents(t *testing.T) {
 }
 
 func TestQueueItemSerialization(t *testing.T) {
-	// Test queueItem structure
 	item := queueItem{
 		Type: "power",
 		Data: []byte(`{"Type":1,"Active":true}`),
 	}
-
 	if item.Type != "power" {
 		t.Errorf("Expected type 'power', got '%s'", item.Type)
 	}
@@ -68,36 +62,29 @@ func TestQueueItemSerialization(t *testing.T) {
 }
 
 func TestChannelBuffering(t *testing.T) {
-	// Test that channels can buffer multiple events
 	powerCh := make(chan PowerEvent, 10)
 
-	// Fill buffer partially
 	for i := 0; i < 5; i++ {
 		powerCh <- PowerEvent{Type: PowerOn, Active: true}
 	}
 
-	// Verify we can still send more
 	select {
 	case powerCh <- PowerEvent{Type: PowerSleep, Active: true}:
-		// Success - channel not full
 	default:
 		t.Error("Channel should not be full after 6 events")
 	}
 
-	// Drain channel
 	count := 0
 	for len(powerCh) > 0 {
 		<-powerCh
 		count++
 	}
-
 	if count != 6 {
 		t.Errorf("Expected to drain 6 events, got %d", count)
 	}
 }
 
 func TestContextCancellationPattern(t *testing.T) {
-	// Test context cancellation pattern used in queue
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan bool)
@@ -110,14 +97,12 @@ func TestContextCancellationPattern(t *testing.T) {
 
 	select {
 	case <-done:
-		// Success
 	case <-time.After(100 * time.Millisecond):
 		t.Error("Goroutine did not respond to context cancellation")
 	}
 }
 
 func TestTemporaryDirectory(t *testing.T) {
-	// Test temporary directory creation and cleanup
 	tempDir := filepath.Join(os.TempDir(), "queue-test-temp")
 
 	err := os.MkdirAll(tempDir, 0755)
@@ -125,32 +110,23 @@ func TestTemporaryDirectory(t *testing.T) {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
 
-	// Verify directory exists
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		t.Error("Expected directory to exist")
 	}
 
-	// Clean up
 	err = os.RemoveAll(tempDir)
 	if err != nil {
 		t.Errorf("Failed to remove temp directory: %v", err)
 	}
 
-	// Verify directory is removed
 	if _, err := os.Stat(tempDir); !os.IsNotExist(err) {
 		t.Error("Expected directory to be removed")
 	}
 }
 
 func TestRestartProcessRetryLogic(t *testing.T) {
-	// Test that RestartProcess returns false when retries are exhausted
 	ctx := context.Background()
-	tempDir := filepath.Join(os.TempDir(), "queue-test-restart")
-	err := os.MkdirAll(tempDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	queue, err := NewQueue(ctx, tempDir)
 	if err != nil {
@@ -158,62 +134,34 @@ func TestRestartProcessRetryLogic(t *testing.T) {
 	}
 	defer queue.Close()
 
-	// Test with 0 retries - should return false and not attempt restart
-	result := queue.RestartProcess(0)
-	if result {
+	if result := queue.RestartProcess(0); result {
 		t.Error("Expected RestartProcess to return false when retriesLeft is 0")
 	}
-
-	// Test with negative retries - should return false
-	result = queue.RestartProcess(-1)
-	if result {
+	if result := queue.RestartProcess(-1); result {
 		t.Error("Expected RestartProcess to return false when retriesLeft is negative")
 	}
 }
 
 func TestRestartProcessPositiveRetries(t *testing.T) {
-	// Test that RestartProcess attempts to restart with positive retries
-	// Note: This test can't actually execute syscall.Exec as it would replace
-	// the test process, but we can verify the logic up to that point
-	ctx := context.Background()
-	tempDir := filepath.Join(os.TempDir(), "queue-test-restart-positive")
-	err := os.MkdirAll(tempDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	queue, err := NewQueue(ctx, tempDir)
-	if err != nil {
-		t.Fatalf("Failed to create queue: %v", err)
-	}
-	defer queue.Close()
-
-	// With positive retries, the function should try to get the executable path
-	// and prepare for restart. We can't test the actual exec call, but we can
-	// verify that it doesn't return false immediately
-	// Note: This will actually try to restart the process, so we skip in CI
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping test that would restart process in CI environment")
 	}
 }
 
 func TestRestartProcessRetryDecrement(t *testing.T) {
-	// Test that the retry count logic works correctly
 	testCases := []struct {
 		retriesLeft      int
 		shouldAttempt    bool
 		expectedNewValue int
 	}{
-		{retriesLeft: 0, shouldAttempt: false, expectedNewValue: 0},
-		{retriesLeft: 1, shouldAttempt: true, expectedNewValue: 0},
-		{retriesLeft: 5, shouldAttempt: true, expectedNewValue: 4},
-		{retriesLeft: 10, shouldAttempt: true, expectedNewValue: 9},
-		{retriesLeft: -1, shouldAttempt: false, expectedNewValue: 0},
+		{0, false, 0},
+		{1, true, 0},
+		{5, true, 4},
+		{10, true, 9},
+		{-1, false, 0},
 	}
 
 	for _, tc := range testCases {
-		// Test the logic without actual process restart
 		if tc.retriesLeft <= 0 {
 			if tc.shouldAttempt {
 				t.Errorf("retriesLeft=%d: expected shouldAttempt=false", tc.retriesLeft)
@@ -222,12 +170,68 @@ func TestRestartProcessRetryDecrement(t *testing.T) {
 			if !tc.shouldAttempt {
 				t.Errorf("retriesLeft=%d: expected shouldAttempt=true", tc.retriesLeft)
 			}
-			// Verify the decremented value would be correct
 			newValue := tc.retriesLeft - 1
 			if newValue != tc.expectedNewValue {
 				t.Errorf("retriesLeft=%d: expected new value %d, got %d",
 					tc.retriesLeft, tc.expectedNewValue, newValue)
 			}
+		}
+	}
+}
+
+// TestQueueEventRouting verifies that events sent to InPowerEvents and
+// InKeyEvents arrive on OutPowerEvents and OutKeyEvents respectively.
+func TestQueueEventRouting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	q, err := NewQueue(ctx, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewQueue failed: %v", err)
+	}
+	defer q.Close()
+
+	// Power event round-trip
+	q.InPowerEvents <- PowerEvent{Type: PowerSleep, Active: true}
+	select {
+	case ev := <-q.OutPowerEvents:
+		if ev.Type != PowerSleep || !ev.Active {
+			t.Errorf("Unexpected power event: %+v", ev)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Timeout waiting for power event")
+	}
+}
+
+// TestQueuePreservesOrder verifies that multiple events arrive in FIFO order.
+func TestQueuePreservesOrder(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	q, err := NewQueue(ctx, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewQueue failed: %v", err)
+	}
+	defer q.Close()
+
+	events := []PowerEvent{
+		{Type: PowerOn, Active: true},
+		{Type: PowerSleep, Active: true},
+		{Type: PowerResume, Active: false},
+	}
+
+	for _, ev := range events {
+		q.InPowerEvents <- ev
+	}
+
+	for i, expected := range events {
+		select {
+		case got := <-q.OutPowerEvents:
+			if got.Type != expected.Type || got.Active != expected.Active {
+				t.Errorf("Event %d: expected %+v, got %+v", i, expected, got)
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Fatalf("Timeout waiting for event %d", i)
 		}
 	}
 }

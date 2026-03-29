@@ -50,6 +50,11 @@ func runController(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := validateConfig(cfg); err != nil {
+		slog.Error("Invalid configuration", "error", err)
+		return err
+	}
+
 	setupLogger(cfg.Debug)
 
 	slog.Info("Starting cec-controller", "config", cfg)
@@ -97,6 +102,7 @@ func runController(cmd *cobra.Command, args []string) error {
 			}
 			keyMapObj.OnKeyPress(kp.KeyCode)
 		case ev := <-queue.OutPowerEvents:
+			var err error
 			switch ev.Type {
 			case PowerOn, PowerResume:
 				slog.Info("Powering on devices", "devices", cfg.PowerDevices)
@@ -106,11 +112,11 @@ func runController(cmd *cobra.Command, args []string) error {
 				err = c.Standby(cfg.PowerDevices...)
 			}
 			if err != nil {
-				slog.Warn("Failed to send power command after connection reopen, libcec is wierd so we need to restart the current process...")
+				slog.Warn("Failed to send power command after connection reopen, libcec is weird so we need to restart the current process...")
 				cancel()
 				if !queue.RestartProcess(cfg.RestartRetries) {
 					slog.Error("Process restart failed or no retries left, exiting")
-					return fmt.Errorf("too much restarts")
+					return fmt.Errorf("too many restarts")
 				}
 			}
 		case <-ctx.Done():
@@ -135,20 +141,27 @@ power events (startup, shutdown, sleep, resume).`,
 	rootCmd.Flags().String("device-name", "", "Device name shown on your TV (leave empty for hostname)")
 	rootCmd.Flags().Bool("debug", false, "Enable debug output")
 	rootCmd.Flags().Bool("no-power-events", false, "Disable power event handling")
-	rootCmd.Flags().Int("retries", 5, "Number of times to retry CEC connection on failure")
+	rootCmd.Flags().Int("retries", 5, "Number of times to retry opening the CEC adapter on failure (each attempt may take up to 10s)")
 	rootCmd.Flags().StringSlice("keymap", []string{}, "Custom CEC-to-Linux key mapping (format <cec>:<linux>, e.g. --keymap 1:105)")
 	rootCmd.Flags().StringSlice("devices", []string{}, "Power event device addresses (e.g. --devices 0,1). Default to 0")
 	rootCmd.Flags().String("queue-dir", "", "Directory for event queue (defaults to temp directory)")
+	rootCmd.Flags().Int("restart-retries", 3, "Maximum number of process restarts when the CEC library gets stuck (0 disables restart)")
 
 	// Bind flags to viper
-	viper.BindPFlag("cec-adapter", rootCmd.Flags().Lookup("cec-adapter"))
-	viper.BindPFlag("device-name", rootCmd.Flags().Lookup("device-name"))
-	viper.BindPFlag("debug", rootCmd.Flags().Lookup("debug"))
-	viper.BindPFlag("no-power-events", rootCmd.Flags().Lookup("no-power-events"))
-	viper.BindPFlag("retries", rootCmd.Flags().Lookup("retries"))
-	viper.BindPFlag("keymap", rootCmd.Flags().Lookup("keymap"))
-	viper.BindPFlag("devices", rootCmd.Flags().Lookup("devices"))
-	viper.BindPFlag("queue-dir", rootCmd.Flags().Lookup("queue-dir"))
+	mustBind := func(key, flag string) {
+		if err := viper.BindPFlag(key, rootCmd.Flags().Lookup(flag)); err != nil {
+			slog.Warn("Failed to bind flag", "key", key, "flag", flag, "error", err)
+		}
+	}
+	mustBind("cec-adapter", "cec-adapter")
+	mustBind("device-name", "device-name")
+	mustBind("debug", "debug")
+	mustBind("no-power-events", "no-power-events")
+	mustBind("retries", "retries")
+	mustBind("keymap", "keymap")
+	mustBind("devices", "devices")
+	mustBind("queue-dir", "queue-dir")
+	mustBind("restart-retries", "restart-retries")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

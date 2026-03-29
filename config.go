@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -11,12 +12,13 @@ import (
 )
 
 const (
-	configFilePath = "/etc/cec-controller.yaml"
-	queueDirEnvVar = "CEC_QUEUE_DIR"
+	configFilePath       = "/etc/cec-controller.yaml"
+	queueDirEnvVar       = "CEC_QUEUE_DIR"
+	restartRetriesEnvVar = "CEC_RESTART_RETRIES"
 )
 
-// loadConfig loads configuration from file and environment variables
-// CLI flags take precedence over config file, which takes precedence over defaults
+// loadConfig loads configuration from file and environment variables.
+// CLI flags take precedence over config file, which takes precedence over defaults.
 func loadConfig() (*Config, error) {
 	cfg := &Config{}
 
@@ -87,6 +89,18 @@ func loadConfig() (*Config, error) {
 		cfg.QueueDir = viper.GetString("queue-dir")
 	}
 
+	// Handle restart retries: env var takes precedence (set by previous process on restart)
+	if retriesStr := os.Getenv(restartRetriesEnvVar); retriesStr != "" {
+		if retries, err := strconv.Atoi(retriesStr); err == nil {
+			cfg.RestartRetries = retries
+		} else {
+			slog.Warn("Invalid CEC_RESTART_RETRIES value", "value", retriesStr, "error", err)
+			cfg.RestartRetries = viper.GetInt("restart-retries")
+		}
+	} else {
+		cfg.RestartRetries = viper.GetInt("restart-retries")
+	}
+
 	// Apply defaults for unset values
 	if cfg.ConnectionRetries == 0 {
 		cfg.ConnectionRetries = 5
@@ -106,8 +120,22 @@ func loadConfig() (*Config, error) {
 			return nil, err
 		}
 	}
+	if cfg.RestartRetries == 0 {
+		cfg.RestartRetries = 3
+	}
 
 	return cfg, nil
+}
+
+// validateConfig checks that all config values are within acceptable ranges.
+func validateConfig(cfg *Config) error {
+	if cfg.ConnectionRetries < 1 {
+		return fmt.Errorf("--retries must be at least 1 (got %d)", cfg.ConnectionRetries)
+	}
+	if cfg.RestartRetries < 0 {
+		return fmt.Errorf("--restart-retries must be non-negative (got %d)", cfg.RestartRetries)
+	}
+	return nil
 }
 
 func parseKeyMapFromMap(keyMapConfig map[string]interface{}) map[string][]int {
@@ -124,16 +152,19 @@ func parseKeyMapFromMap(keyMapConfig map[string]interface{}) map[string][]int {
 
 		codes := strings.Split(linuxCodesStr, "+")
 		var linuxCodes []int
+		valid := true
 		for _, codeStr := range codes {
 			code, err := strconv.Atoi(codeStr)
 			if err != nil {
-				slog.Warn("Invalid linux key code", "code", codeStr, "error", err)
-				continue
+				slog.Warn("Invalid keymap entry, skipping", "key", cecKey, "value", linuxCodesStr, "badCode", codeStr)
+				valid = false
+				break
 			}
 			linuxCodes = append(linuxCodes, code)
 		}
-
-		m[cecKey] = linuxCodes
+		if valid {
+			m[cecKey] = linuxCodes
+		}
 	}
 	return m
 }
@@ -149,16 +180,19 @@ func parseKeyMapFlags(keyMapArgs []string) map[string][]int {
 
 		codes := strings.Split(parts[1], "+")
 		var linuxCodes []int
+		valid := true
 		for _, codeStr := range codes {
 			code, err := strconv.Atoi(codeStr)
 			if err != nil {
-				slog.Warn("Invalid linux key code", "code", codeStr, "error", err)
-				continue
+				slog.Warn("Invalid keymap entry, skipping", "entry", entry, "badCode", codeStr)
+				valid = false
+				break
 			}
 			linuxCodes = append(linuxCodes, code)
 		}
-
-		m[parts[0]] = linuxCodes
+		if valid {
+			m[parts[0]] = linuxCodes
+		}
 	}
 	return m
 }

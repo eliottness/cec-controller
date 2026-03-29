@@ -4,6 +4,13 @@ CEC Controller is a Linux CLI application that listens for HDMI-CEC key events a
 keyboard actions. It also reacts to system power events (startup, shutdown, sleep, resume) and can be configured for
 custom key mappings.
 
+> [!WARNING]
+> **This project requires libcec-compatible hardware.** You need a physical HDMI-CEC adapter recognised by
+> [libcec](https://libcec.pulse-eight.com/) — the most common option is the
+> [Pulse-Eight USB–CEC Adapter](https://www.pulse-eight.com/p/104/usb-hdmi-cec-adapter). Some Raspberry Pi models
+> expose a built-in CEC interface (`/dev/ttyAMA0`). Without compatible hardware the daemon will fail to open the
+> adapter and exit immediately.
+
 ## Features
 
 - **HDMI-CEC key listening:** Uses [libcec](https://libcec.pulse-eight.com/) via Go bindings to receive remote key
@@ -61,7 +68,7 @@ sudo dnf install cec-controller_<version>_fedora_arm64.rpm
 Requires `libcec-dev` and `libp8-platform-dev` on debian-based systems or just `libcec-devel` on fedora-based systems:
 
 ```sh
-go build -o cec-controller main.go
+go build -o cec-controller .
 ```
 
 ## Usage
@@ -107,14 +114,17 @@ devices:
 - `--no-power-events`  
   Disable handling of system power events.
 
-- `--devices`  
-  Power event device logical addresses (e.g. --devices 0,1). Default to 0
+- `--devices`
+  Power event device logical addresses (e.g. --devices 0,1). Defaults to 0.
 
-- `--retries`  
-  Number of connection retries to the CEC adapter. Default is 5. Each try can take up to 10 seconds.
+- `--retries`
+  Number of times to retry opening the CEC adapter on failure. Default is 5. Each attempt may take up to 10 seconds.
+
+- `--restart-retries`
+  Maximum number of process restarts when the CEC library gets stuck. Default is 3. Set to 0 to disable restarts.
 
 - `--device-name`
-  Device name to report to CEC network. Default is the hostname
+  Device name to report to the CEC network. Default is the hostname.
 
 #### Example using custom key mappings
 
@@ -150,11 +160,9 @@ WantedBy=multi-user.target
 
 This app detects and reacts to:
 
-- **Startup:** Emitted when the service starts alongside systemd
-- **Shutdown:** On system shutdown/reboot
-- **Sleep/Resume:** On suspend/resume events
-
-You can customize hooks for these events in your code.
+- **Startup:** Powers on connected devices when the service starts alongside systemd
+- **Shutdown:** Puts connected devices to standby on system shutdown/reboot
+- **Sleep/Resume:** Puts devices to standby on suspend, powers them on again on resume
 
 ## Contributing
 

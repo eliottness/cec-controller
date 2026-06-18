@@ -37,13 +37,13 @@ Download pre-built binaries and packages from the [Releases](https://github.com/
 **Ubuntu/Debian (amd64):**
 ```sh
 wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_amd64.deb
-sudo dpkg -i cec-controller_<version>_ubuntu_amd64.deb
+sudo apt install ./cec-controller_<version>_ubuntu_amd64.deb
 ```
 
 **Ubuntu/Debian (arm64):**
 ```sh
 wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_arm64.deb
-sudo dpkg -i cec-controller_<version>_ubuntu_arm64.deb
+sudo apt install ./cec-controller_<version>_ubuntu_arm64.deb
 ```
 
 **Fedora/RHEL (amd64):**

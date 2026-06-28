@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# use-prebuilt.sh — goreleaser gobinary wrapper.
+# use-prebuilt.sh — goreleaser build `tool` wrapper (builds.tool in .goreleaser.yml).
 # Copies a pre-built binary to wherever goreleaser wants it instead of
-# compiling from source. Used so that native per-arch builds from
-# separate CI runners can be packaged by a single goreleaser invocation.
+# compiling from source. Used so that native per-(libcec major, arch) builds
+# from separate CI containers can be packaged by a single goreleaser
+# invocation. (goreleaser's native "prebuilt" builder is Pro-only.)
 #
-# goreleaser calls: <gobinary> build [-v] [-trimpath] -o <path> [-ldflags ...] <main>
+# goreleaser calls: <tool> build [-v] [-trimpath] -o <path> [-ldflags ...] <main>
+# The build id (e.g. "libcec6-amd64") is embedded in <path> as
+# dist/<id>_<target>/..., which we parse to pick the right pre-built binary.
 set -e
 
 OUTPUT=""
@@ -23,13 +26,24 @@ if [[ -z "$OUTPUT" ]]; then
   exit 1
 fi
 
+# libcec variant (which runtime ABI the binary links): comes from the build id.
+case "$OUTPUT" in
+  *libcec6*) VARIANT="libcec6" ;;
+  *libcec7*) VARIANT="libcec7" ;;
+  *fedora*)  VARIANT="fedora" ;;
+  *)
+    echo "use-prebuilt: cannot determine libcec variant from output path: $OUTPUT" >&2
+    exit 1
+    ;;
+esac
+
 if [[ "$OUTPUT" == *"arm64"* ]]; then
   ARCH="arm64"
 else
   ARCH="amd64"
 fi
 
-SRC="prebuilt/$ARCH/cec-controller"
+SRC="prebuilt/$VARIANT/$ARCH/cec-controller"
 if [[ ! -f "$SRC" ]]; then
   echo "use-prebuilt: pre-built binary not found: $SRC" >&2
   exit 1

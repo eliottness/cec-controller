@@ -41,41 +41,89 @@ jobs:
       - name: Run tests
         run: CGO_ENABLED=1 go test -v ./...
 
+  # cec-controller dynamically links libcec, whose major version is
+  # ABI-incompatible across distros. We build one binary per (libcec major,
+  # arch) inside a pinned container so each links the correct libcec.so AND an
+  # old-enough glibc for every target sharing that major:
+  #   libcec6 -> built on ubuntu:22.04 (glibc 2.35) -> runs on 22.04 + 24.04
+  #   libcec7 -> built on ubuntu:26.04                -> runs on 26.04
+  #   fedora  -> built on fedora:latest (libcec.so.7) -> runs on Fedora
   build:
-    name: Build (${{ matrix.goarch }})
+    name: Build (${{ matrix.variant }}/${{ matrix.arch }})
     needs: test
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
-            goarch: amd64
-          - runner: ubuntu-24.04-arm
-            goarch: arm64
+          - { variant: libcec6, arch: amd64, runner: ubuntu-latest,    image: "ubuntu:22.04",  family: ubuntu }
+          - { variant: libcec6, arch: arm64, runner: ubuntu-24.04-arm, image: "ubuntu:22.04",  family: ubuntu }
+          - { variant: libcec7, arch: amd64, runner: ubuntu-latest,    image: "ubuntu:26.04",  family: ubuntu }
+          - { variant: libcec7, arch: arm64, runner: ubuntu-24.04-arm, image: "ubuntu:26.04",  family: ubuntu }
+          - { variant: fedora,  arch: amd64, runner: ubuntu-latest,    image: "fedora:latest", family: fedora }
+          - { variant: fedora,  arch: arm64, runner: ubuntu-24.04-arm, image: "fedora:latest", family: fedora }
     steps:
+      # Minimal base images lack git/ca-certificates, so install build deps
+      # before checkout. (Runs as root inside the container — no sudo.)
+      - name: Install build dependencies (Ubuntu)
+        if: matrix.family == 'ubuntu'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates gcc libc6-dev pkg-config \
+            libcec-dev libp8-platform-dev libudev-dev
+
+      - name: Install build dependencies (Fedora)
+        if: matrix.family == 'fedora'
+        run: |
+          dnf install -y \
+            git ca-certificates gcc glibc-devel pkgconf-pkg-config \
+            libcec-devel platform-devel systemd-devel golang
+
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Jammy's apt Go is too old for go.mod; pull a current toolchain.
+      # Fedora ships a current Go via the golang package installed above.
       - name: Set up Go
+        if: matrix.family == 'ubuntu'
         uses: actions/setup-go@v5
         with:
           go-version: stable
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libcec-dev libp8-platform-dev
-
       - name: Build binary
         run: |
-          mkdir -p prebuilt/${{ matrix.goarch }}
-          CGO_ENABLED=1 go build -ldflags="-s -w" -o prebuilt/${{ matrix.goarch }}/cec-controller .
+          mkdir -p prebuilt/${{ matrix.variant }}/${{ matrix.arch }}
+          CGO_ENABLED=1 go build -ldflags="-s -w" -buildvcs=false \
+            -o prebuilt/${{ matrix.variant }}/${{ matrix.arch }}/cec-controller .
+
+      - name: Verify libcec linkage
+        run: |
+          echo "== ldd =="
+          ldd prebuilt/${{ matrix.variant }}/${{ matrix.arch }}/cec-controller | grep -i libcec || true
+
+      # Generate man pages once, using the libcec6/amd64 binary (libcec + the
+      # binary are both present here), and share them with the release job.
+      - name: Generate man pages
+        if: matrix.variant == 'libcec6' && matrix.arch == 'amd64'
+        run: |
+          mkdir -p manpages
+          ./prebuilt/libcec6/amd64/cec-controller generate-docs --output-dir ./manpages/
+          gzip -f ./manpages/cec-controller.1
+
+      - name: Upload man pages
+        if: matrix.variant == 'libcec6' && matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: manpages
+          path: manpages/cec-controller.1.gz
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: prebuilt-${{ matrix.goarch }}
-          path: prebuilt/${{ matrix.goarch }}/cec-controller
+          name: prebuilt-${{ matrix.variant }}-${{ matrix.arch }}
+          path: prebuilt/${{ matrix.variant }}/${{ matrix.arch }}/cec-controller
 
   release:
     name: Package and release
@@ -92,31 +140,50 @@ jobs:
         with:
           go-version: stable
 
-      - name: Install libcec runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libcec6
-
-      - name: Download amd64 binary
+      - name: Download libcec6 amd64 binary
         uses: actions/download-artifact@v4
         with:
-          name: prebuilt-amd64
-          path: prebuilt/amd64/
+          name: prebuilt-libcec6-amd64
+          path: prebuilt/libcec6/amd64/
 
-      - name: Download arm64 binary
+      - name: Download libcec6 arm64 binary
         uses: actions/download-artifact@v4
         with:
-          name: prebuilt-arm64
-          path: prebuilt/arm64/
+          name: prebuilt-libcec6-arm64
+          path: prebuilt/libcec6/arm64/
+
+      - name: Download libcec7 amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-libcec7-amd64
+          path: prebuilt/libcec7/amd64/
+
+      - name: Download libcec7 arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-libcec7-arm64
+          path: prebuilt/libcec7/arm64/
+
+      - name: Download fedora amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-fedora-amd64
+          path: prebuilt/fedora/amd64/
+
+      - name: Download fedora arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilt-fedora-arm64
+          path: prebuilt/fedora/arm64/
+
+      - name: Download man pages
+        uses: actions/download-artifact@v4
+        with:
+          name: manpages
+          path: manpages/
 
       - name: Make binaries executable
         run: find prebuilt -type f -name cec-controller -exec chmod +x {} \;
-
-      - name: Generate man pages
-        run: |
-          mkdir -p manpages
-          ./prebuilt/amd64/cec-controller generate-docs --output-dir ./manpages/
-          gzip -f ./manpages/cec-controller.1
 
       - name: Run GoReleaser (Dry Run)
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}

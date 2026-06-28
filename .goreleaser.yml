@@ -1,9 +1,16 @@
 version: 2
 project_name: cec-controller
 
+# Binaries are pre-built per (libcec major, arch) in separate CI containers
+# (see .github/workflows/ci.yml) because cec-controller dynamically links
+# libcec, whose major version is ABI-incompatible across distros:
+#   libcec6 -> Ubuntu 22.04 (jammy) + 24.04 (noble)
+#   libcec7 -> Ubuntu 26.04 (resolute)
+#   libcec (=.so.7) -> Fedora
+# scripts/use-prebuilt.sh selects the right binary from prebuilt/<variant>/<arch>/.
 builds:
-  - id: amd64
-    gobinary: scripts/use-prebuilt.sh
+  - id: libcec6-amd64
+    tool: scripts/use-prebuilt.sh
     main: .
     binary: cec-controller
     goos: [linux]
@@ -12,8 +19,8 @@ builds:
       - CGO_ENABLED=1
     ldflags: -s -w
 
-  - id: arm64
-    gobinary: scripts/use-prebuilt.sh
+  - id: libcec6-arm64
+    tool: scripts/use-prebuilt.sh
     main: .
     binary: cec-controller
     goos: [linux]
@@ -22,18 +29,70 @@ builds:
       - CGO_ENABLED=1
     ldflags: -s -w
 
+  - id: libcec7-amd64
+    tool: scripts/use-prebuilt.sh
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+  - id: libcec7-arm64
+    tool: scripts/use-prebuilt.sh
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+  - id: fedora-amd64
+    tool: scripts/use-prebuilt.sh
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+  - id: fedora-arm64
+    tool: scripts/use-prebuilt.sh
+    main: .
+    binary: cec-controller
+    goos: [linux]
+    goarch: [arm64]
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w
+
+# One archive per variant: two builds share each linux/<arch> target, so a
+# single archive block would produce colliding names. Scope each block to its
+# variant's build ids and embed the variant in the name.
 archives:
-  - id: default
+  - id: libcec6
+    ids: [libcec6-amd64, libcec6-arm64]
     formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_libcec6_{{ .Arch }}"
+  - id: libcec7
+    ids: [libcec7-amd64, libcec7-arm64]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_libcec7_{{ .Arch }}"
+  - id: fedora
+    ids: [fedora-amd64, fedora-arm64]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_fedora_{{ .Arch }}"
 
 nfpms:
-  # Ubuntu/Debian packages
-  - id: ubuntu-deb
+  # Ubuntu/Debian package for libcec6 distros: 22.04 (jammy) + 24.04 (noble).
+  - id: ubuntu-deb-libcec6
     ids:
-      - amd64
-      - arm64
-    description: "CEC Controller Service"
+      - libcec6-amd64
+      - libcec6-arm64
+    description: "CEC Controller Service (Ubuntu 22.04/24.04, libcec6)"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"
     license: "GPLv3"
@@ -42,7 +101,30 @@ nfpms:
     section: "utils"
     priority: "optional"
     bindir: "/usr/bin"
-    file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_{{ .Arch }}"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_libcec6_{{ .Arch }}"
+    contents:
+      - src: ./cec-controller.service
+        dst: /lib/systemd/system/cec-controller.service
+      - src: ./manpages/cec-controller.1.gz
+        dst: /usr/share/man/man1/cec-controller.1.gz
+    dependencies:
+      - libcec6
+
+  # Ubuntu/Debian package for libcec7 distros: 26.04 (resolute).
+  - id: ubuntu-deb-libcec7
+    ids:
+      - libcec7-amd64
+      - libcec7-arm64
+    description: "CEC Controller Service (Ubuntu 26.04, libcec7)"
+    maintainer: "eliottness"
+    homepage: "https://github.com/eliottness/cec-controller"
+    license: "GPLv3"
+    formats: [deb]
+    vendor: "eliottness"
+    section: "utils"
+    priority: "optional"
+    bindir: "/usr/bin"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_ubuntu_libcec7_{{ .Arch }}"
     contents:
       - src: ./cec-controller.service
         dst: /lib/systemd/system/cec-controller.service
@@ -51,11 +133,11 @@ nfpms:
     dependencies:
       - libcec7
 
-  # Fedora/RHEL packages
+  # Fedora/RHEL package (libcec.so.7, provided by the "libcec" package).
   - id: fedora-rpm
     ids:
-      - amd64
-      - arm64
+      - fedora-amd64
+      - fedora-arm64
     description: "CEC Controller Service for Fedora/RHEL"
     maintainer: "eliottness"
     homepage: "https://github.com/eliottness/cec-controller"

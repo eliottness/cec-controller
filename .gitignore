@@ -3,6 +3,7 @@ coverage.out
 *.test
 dist/
 prebuilt/
+manpages/
 *.deb
 *.rpm
 pkg-*

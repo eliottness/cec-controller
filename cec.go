@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 )
 
 // CEC device type constants for SetActiveSource.
@@ -28,10 +28,11 @@ type CEC struct {
 	cecOpener func(string, string) (CECConnection, error)
 
 	keyPresses chan *cec.KeyPress
+	alerts     chan *cec.Alert
 }
 
-func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress) (*CEC, error) {
-	return newCECWithOpener(adapter, deviceName, connectionRetries, keyPresses, func(adapter, deviceName string) (CECConnection, error) {
+func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, alerts chan *cec.Alert) (*CEC, error) {
+	return newCECWithOpener(adapter, deviceName, connectionRetries, keyPresses, alerts, func(adapter, deviceName string) (CECConnection, error) {
 		conn, err := cec.Open(adapter, deviceName)
 		if err != nil {
 			return nil, err
@@ -40,7 +41,7 @@ func NewCEC(adapter string, deviceName string, connectionRetries int, keyPresses
 	})
 }
 
-func newCECWithOpener(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, opener func(string, string) (CECConnection, error)) (*CEC, error) {
+func newCECWithOpener(adapter string, deviceName string, connectionRetries int, keyPresses chan *cec.KeyPress, alerts chan *cec.Alert, opener func(string, string) (CECConnection, error)) (*CEC, error) {
 	if connectionRetries < 1 {
 		slog.Warn("Connection retries must be at least 1, setting to 1")
 		connectionRetries = 1
@@ -52,6 +53,7 @@ func newCECWithOpener(adapter string, deviceName string, connectionRetries int, 
 	}
 
 	conn.SetKeyPressesChan(keyPresses)
+	conn.SetAlertsChan(alerts)
 
 	return &CEC{
 		conn:       conn,
@@ -59,6 +61,7 @@ func newCECWithOpener(adapter string, deviceName string, connectionRetries int, 
 		retries:    connectionRetries,
 		deviceName: deviceName,
 		keyPresses: keyPresses,
+		alerts:     alerts,
 		cecOpener:  opener,
 	}, nil
 }
@@ -82,6 +85,7 @@ func (c *CEC) reopen() error {
 		// Here we are literally hoping nobody reads this value concurrently we have no choice
 		c.conn = conn
 		c.conn.SetKeyPressesChan(c.keyPresses)
+		c.conn.SetAlertsChan(c.alerts)
 		slog.Info("CEC connection re-established")
 		return nil
 	}

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 	keybd "github.com/micmonay/keybd_event"
 )
 
@@ -14,6 +14,7 @@ type CECConnection interface {
 	Standby(address int) error
 	SetActiveSource(deviceType int) bool
 	SetKeyPressesChan(ch chan *cec.KeyPress)
+	SetAlertsChan(ch chan *cec.Alert)
 	Close()
 }
 
@@ -44,6 +45,10 @@ func (w *CECConnectionWrapper) SetActiveSource(deviceType int) bool {
 
 func (w *CECConnectionWrapper) SetKeyPressesChan(ch chan *cec.KeyPress) {
 	w.Connection.KeyPresses = ch
+}
+
+func (w *CECConnectionWrapper) SetAlertsChan(ch chan *cec.Alert) {
+	w.Connection.Alerts = ch
 }
 
 // KeyboardEmitter abstracts virtual key event emission for testing.

@@ -176,6 +176,15 @@ This app detects and reacts to:
 
 Before putting devices to standby, cec-controller acquires a systemd-logind [delay inhibitor lock](https://systemd.io/INHIBITOR_LOCKS/) for `sleep` and `shutdown`. This guarantees the CEC standby command completes before the system proceeds, preventing TVs and receivers from being left powered on after the host sleeps.
 
+## Connection Reliability
+
+HDMI-CEC adapters aren't always perfectly stable. A USB-CEC adapter can briefly drop off the bus and re-enumerate — commonly when the TV powers off or cuts HDMI power, on a cable glitch, or after a suspend/resume — and libcec itself can occasionally get stuck. cec-controller is designed to ride through these events instead of silently going deaf:
+
+- When libcec reports that the **adapter connection was lost**, cec-controller detects it and automatically restarts to re-acquire the adapter, even if it comes back under a different device path (e.g. `/dev/ttyACM0` → `/dev/ttyACM1`). Queued key and power events are preserved across the restart.
+- Transient errors **opening or communicating with the adapter** are retried (`--retries`), and if libcec gets wedged the process restarts a bounded number of times (`--restart-retries`) before handing off to systemd (`Restart=on-failure`).
+
+In practice, once it's running you can power your TV on and off, suspend and resume the host, or unplug and replug the adapter without your remote going dead — recovery is automatic and typically takes about a second.
+
 ## Contributing
 
 PRs and issues are welcome!

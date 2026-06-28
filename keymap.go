@@ -3,7 +3,7 @@ package main
 import (
 	"log/slog"
 
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 	keybd "github.com/micmonay/keybd_event"
 )
 
@@ -25,7 +25,6 @@ var base = map[int]int{
 	cec.GetKeyCodeByName("Play"):   keybd.VK_PLAY,
 	cec.GetKeyCodeByName("Pause"):  keybd.VK_PAUSE,
 	cec.GetKeyCodeByName("Stop"):   keybd.VK_STOP,
-	cec.GetKeyCodeByName("Home"):   keybd.VK_HOME,
 
 	// Numbers
 	cec.GetKeyCodeByName("0"): keybd.VK_0,

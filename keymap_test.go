@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 )
 
 // MockKeyboardEmitter records Emit calls for testing.

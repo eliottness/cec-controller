@@ -32,30 +32,43 @@ custom key mappings.
 
 ### From Release (Recommended)
 
-Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page:
+Download pre-built binaries and packages from the [Releases](https://github.com/eliottness/cec-controller/releases) page.
 
-**Ubuntu/Debian (amd64):**
+cec-controller links against **libcec**, whose major version differs between distro releases,
+so there are two Ubuntu `.deb` variants. Pick the one matching your system:
+
+| Your system | Package to install |
+|---|---|
+| Ubuntu 22.04 (jammy) / 24.04 (noble) | `cec-controller_<version>_ubuntu_libcec6_<arch>.deb` |
+| Ubuntu 26.04 (resolute) | `cec-controller_<version>_ubuntu_libcec7_<arch>.deb` |
+| Fedora / RHEL | `cec-controller_<version>_fedora_<arch>.rpm` |
+
+Not sure which libcec your Ubuntu provides? This prints the variant to download:
+
 ```sh
-wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_amd64.deb
-sudo apt install ./cec-controller_<version>_ubuntu_amd64.deb
+# Prints "libcec6" or "libcec7" — download the matching *_ubuntu_<that>_*.deb
+apt-cache policy libcec6 libcec7 2>/dev/null \
+  | awk '/^libcec[67]:/{p=$1} /Candidate:/ && $2!="(none)"{sub(":","",p); print p}'
 ```
 
-**Ubuntu/Debian (arm64):**
+**Ubuntu/Debian (libcec6 — 22.04 & 24.04):**
 ```sh
-wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_arm64.deb
-sudo apt install ./cec-controller_<version>_ubuntu_arm64.deb
+# replace amd64 with arm64 on ARM systems
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_libcec6_amd64.deb
+sudo apt install ./cec-controller_<version>_ubuntu_libcec6_amd64.deb
 ```
 
-**Fedora/RHEL (amd64):**
+**Ubuntu/Debian (libcec7 — 26.04):**
 ```sh
+wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_ubuntu_libcec7_amd64.deb
+sudo apt install ./cec-controller_<version>_ubuntu_libcec7_amd64.deb
+```
+
+**Fedora/RHEL:**
+```sh
+# replace amd64 with arm64 on ARM systems
 wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_amd64.rpm
-sudo dnf install cec-controller_<version>_fedora_amd64.rpm
-```
-
-**Fedora/RHEL (arm64):**
-```sh
-wget https://github.com/eliottness/cec-controller/releases/latest/download/cec-controller_<version>_fedora_arm64.rpm
-sudo dnf install cec-controller_<version>_fedora_arm64.rpm
+sudo dnf install ./cec-controller_<version>_fedora_amd64.rpm
 ```
 
 ### From Source
@@ -220,7 +233,12 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-The pipeline builds native binaries on `ubuntu-latest` (amd64) and `ubuntu-24.04-arm` (arm64), then packages them with goreleaser into `.tar.gz`, `.deb`, and `.rpm` artifacts published to the [Releases](https://github.com/eliottness/cec-controller/releases) page.
+Because cec-controller dynamically links libcec, the pipeline builds one native binary per
+(libcec major, architecture) inside a pinned container — `ubuntu:22.04` (libcec6, runs on
+22.04 & 24.04), `ubuntu:26.04` (libcec7, runs on 26.04), and `fedora:latest` (libcec.so.7) —
+for both amd64 and arm64. goreleaser then packages them into `.tar.gz`, two Ubuntu `.deb`
+variants (`libcec6`/`libcec7`, each declaring the matching `Depends:`), and a Fedora `.rpm`,
+published to the [Releases](https://github.com/eliottness/cec-controller/releases) page.
 
 ## License
 

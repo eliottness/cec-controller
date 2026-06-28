@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/eliottness/cec-controller/cec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"github.com/spf13/viper"
@@ -71,7 +72,10 @@ func runController(cmd *cobra.Command, args []string) error {
 	}
 	defer queue.Close()
 
-	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents)
+	// alerts carries libcec connection-loss notifications (e.g. when the USB
+	// adapter re-enumerates) so the main loop can recover instead of going deaf.
+	alerts := make(chan *cec.Alert, 10)
+	c, err := NewCEC(cfg.CECAdapter, cfg.DeviceName, cfg.ConnectionRetries, queue.InKeyEvents, alerts)
 	if err != nil {
 		slog.Error("Failed to open CEC, you can specify a cec-adapter since auto-detect does not work", "cec-adapter", cfg.CECAdapter, "error", err)
 		return err
@@ -142,6 +146,25 @@ func runController(cmd *cobra.Command, args []string) error {
 					slog.Error("Process restart failed or no retries left, exiting")
 					return fmt.Errorf("too many restarts")
 				}
+			}
+		case alert := <-alerts:
+			if alert == nil || alert.Type != cec.AlertConnectionLost {
+				if alert != nil {
+					// Non-fatal alerts (e.g. TV_POLL_FAILED while the TV is off,
+					// or a firmware-upgrade notice) are routine and can repeat,
+					// so keep them at debug to avoid spamming the journal.
+					slog.Debug("CEC alert received", "type", alert.Type)
+				}
+				continue
+			}
+			// The adapter dropped off the bus (e.g. USB re-enumeration). The
+			// libcec handle is dead and won't deliver events anymore; a clean
+			// process restart re-runs adapter auto-detect and re-acquires it.
+			slog.Warn("CEC connection lost, restarting process to re-acquire the adapter")
+			cancel()
+			if !queue.RestartProcess(cfg.RestartRetries) {
+				slog.Error("Process restart failed or no retries left, exiting")
+				return fmt.Errorf("too many restarts")
 			}
 		case <-ctx.Done():
 			slog.Info("Shutting down...")

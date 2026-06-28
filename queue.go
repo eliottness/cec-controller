@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/beeker1121/goque"
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 )
 
 type Queue struct {

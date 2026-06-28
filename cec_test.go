@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/claes/cec"
+	"github.com/eliottness/cec-controller/cec"
 )
 
 // MockCECConnection is a mock implementation of CECConnection for testing.
@@ -18,6 +18,7 @@ type MockCECConnection struct {
 	StandbyCalls         []int
 	SetActiveSourceCalls []int
 	CloseCalled          bool
+	AlertsChan           chan *cec.Alert
 }
 
 func (m *MockCECConnection) PowerOn(address int) error {
@@ -52,6 +53,8 @@ func (m *MockCECConnection) Close() {
 }
 
 func (m *MockCECConnection) SetKeyPressesChan(chan *cec.KeyPress) {}
+
+func (m *MockCECConnection) SetAlertsChan(ch chan *cec.Alert) { m.AlertsChan = ch }
 
 // newTestCEC creates a CEC instance with the given mock connection, bypassing cec.Open.
 func newTestCEC(conn CECConnection, opener func(string, string) (CECConnection, error)) *CEC {
@@ -165,7 +168,7 @@ func TestCECRetryLogic(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		mock := &MockCECConnection{}
-		c, err := newCECWithOpener("", "", tc.input, make(chan *cec.KeyPress, 1),
+		c, err := newCECWithOpener("", "", tc.input, make(chan *cec.KeyPress, 1), make(chan *cec.Alert, 1),
 			func(string, string) (CECConnection, error) { return mock, nil })
 		if err != nil {
 			t.Fatalf("Input %d: unexpected error: %v", tc.input, err)
@@ -245,5 +248,43 @@ func TestCECConnectionWrapper_InterfaceCompliance(t *testing.T) {
 	var conn CECConnection = &MockCECConnection{}
 	if err := conn.PowerOn(0); err != nil {
 		t.Errorf("Expected nil from mock PowerOn, got %v", err)
+	}
+}
+
+// The alerts channel must be wired onto the connection at construction, so that
+// libcec connection-loss alerts reach the main loop's recovery path.
+func TestNewCEC_WiresAlertsChannel(t *testing.T) {
+	mock := &MockCECConnection{}
+	alerts := make(chan *cec.Alert, 1)
+	_, err := newCECWithOpener("", "", 1, make(chan *cec.KeyPress, 1), alerts,
+		func(string, string) (CECConnection, error) { return mock, nil })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mock.AlertsChan != alerts {
+		t.Error("expected newCECWithOpener to call SetAlertsChan with the alerts channel")
+	}
+}
+
+// reopen() must re-wire the alerts channel onto the replacement connection,
+// otherwise a power-path reopen would leave the daemon deaf to future alerts.
+func TestCECReopen_RewiresAlertsChannel(t *testing.T) {
+	alerts := make(chan *cec.Alert, 1)
+	failing := &MockCECConnection{
+		PowerOnFunc: func(int) error { return errors.New("connection lost") },
+	}
+	fresh := &MockCECConnection{}
+	c, err := newCECWithOpener("", "", 1, make(chan *cec.KeyPress, 1), alerts,
+		func(string, string) (CECConnection, error) { return failing, nil })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Swap the opener so the reopen triggered by the failing PowerOn returns fresh.
+	c.cecOpener = func(string, string) (CECConnection, error) { return fresh, nil }
+	if err := c.PowerOn(0); err != nil {
+		t.Fatalf("expected success after reopen, got %v", err)
+	}
+	if fresh.AlertsChan != alerts {
+		t.Error("expected reopen() to call SetAlertsChan on the new connection")
 	}
 }

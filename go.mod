@@ -2,6 +2,8 @@ module github.com/eliottness/cec-controller
 
 go 1.24
 
+toolchain go1.27.3
+
 require (
 	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/godbus/dbus/v5 v5.1.0

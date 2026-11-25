@@ -30,7 +30,7 @@ jobs:
       - name: Install libcec for testing
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcec-dev libp8-platform-dev
+          sudo apt-get install -y libcec-dev libp8-platform-dev libudev-dev
 
       - name: Check formatting
         run: test -z "$(gofmt -l .)"

@@ -139,13 +139,12 @@ func runController(cmd *cobra.Command, args []string) error {
 				err = c.Standby(cfg.PowerDevices...)
 				lock.Release()
 			}
+			// A device that does not acknowledge a power command (TV unplugged,
+			// CEC disabled, already in the requested state) is not a reason to stop
+			// forwarding key presses. A dead adapter is reported through the
+			// connection-lost alert below, which restarts the process.
 			if err != nil {
-				slog.Warn("Failed to send power command after connection reopen, libcec is weird so we need to restart the current process...")
-				cancel()
-				if !queue.RestartProcess(cfg.RestartRetries) {
-					slog.Error("Process restart failed or no retries left, exiting")
-					return fmt.Errorf("too many restarts")
-				}
+				slog.Warn("Failed to send power command", "type", ev.Type, "devices", cfg.PowerDevices, "error", err)
 			}
 		case alert := <-alerts:
 			if alert == nil || alert.Type != cec.AlertConnectionLost {

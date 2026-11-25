@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -184,17 +185,30 @@ func (q *Queue) RestartProcess(retriesLeft int) bool {
 	slog.Warn("Restarting process", "retriesLeft", retriesLeft-1)
 	q.cleanup()
 
-	// Pass the decremented retry count via environment variable
-	env := os.Environ()
-	env = append(env, queueDirEnvVar+"="+q.dir)
-	env = append(env, restartRetriesEnvVar+"="+fmt.Sprintf("%d", retriesLeft-1))
-
-	if err := syscall.Exec(execPath, os.Args, env); err != nil {
+	if err := syscall.Exec(execPath, os.Args, restartEnv(os.Environ(), q.dir, retriesLeft-1)); err != nil {
 		slog.Error("Failed to restart", "error", err)
 		return false
 	}
 	// syscall.Exec only returns on failure - success replaces the current process
 	return true
+}
+
+// restartEnv passes the queue directory and the decremented retry count to the
+// next process. Values inherited from a previous restart are dropped first:
+// os.Getenv returns the first duplicate, so appending alone would keep the
+// retry count at its first restart value forever.
+func restartEnv(environ []string, queueDir string, retriesLeft int) []string {
+	env := make([]string, 0, len(environ)+2)
+	for _, kv := range environ {
+		if strings.HasPrefix(kv, queueDirEnvVar+"=") || strings.HasPrefix(kv, restartRetriesEnvVar+"=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env,
+		queueDirEnvVar+"="+queueDir,
+		restartRetriesEnvVar+"="+strconv.Itoa(retriesLeft),
+	)
 }
 
 func (q *Queue) Close() {

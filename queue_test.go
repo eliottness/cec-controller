@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -176,6 +177,34 @@ func TestRestartProcessRetryDecrement(t *testing.T) {
 					tc.retriesLeft, tc.expectedNewValue, newValue)
 			}
 		}
+	}
+}
+
+// TestRestartEnvReplacesInheritedValues guards against the retry count being
+// stuck: after one restart the environment already holds both variables, and
+// os.Getenv would keep returning the first (stale) copy if they were appended.
+func TestRestartEnvReplacesInheritedValues(t *testing.T) {
+	inherited := []string{"PATH=/usr/bin", queueDirEnvVar + "=/tmp/old", restartRetriesEnvVar + "=2"}
+
+	env := restartEnv(inherited, "/tmp/new", 1)
+
+	var dirs, retries []string
+	for _, kv := range env {
+		switch {
+		case strings.HasPrefix(kv, queueDirEnvVar+"="):
+			dirs = append(dirs, kv)
+		case strings.HasPrefix(kv, restartRetriesEnvVar+"="):
+			retries = append(retries, kv)
+		}
+	}
+	if len(dirs) != 1 || dirs[0] != queueDirEnvVar+"=/tmp/new" {
+		t.Errorf("expected only the new queue dir, got %v", dirs)
+	}
+	if len(retries) != 1 || retries[0] != restartRetriesEnvVar+"=1" {
+		t.Errorf("expected only the decremented retry count, got %v", retries)
+	}
+	if env[0] != "PATH=/usr/bin" {
+		t.Errorf("expected unrelated variables to be kept, got %v", env)
 	}
 }
 

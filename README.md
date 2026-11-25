@@ -195,6 +195,7 @@ HDMI-CEC adapters aren't always perfectly stable. A USB-CEC adapter can briefly 
 
 - When libcec reports that the **adapter connection was lost**, cec-controller detects it and automatically restarts to re-acquire the adapter, even if it comes back under a different device path (e.g. `/dev/ttyACM0` → `/dev/ttyACM1`). Queued key and power events are preserved across the restart.
 - Transient errors **opening or communicating with the adapter** are retried (`--retries`), and if libcec gets wedged the process restarts a bounded number of times (`--restart-retries`) before handing off to systemd (`Restart=on-failure`).
+- A **power command the TV does not acknowledge** (TV unplugged, its CEC off or stuck) is logged as a warning and does not stop the service: key presses keep being forwarded, and nothing restarts.
 
 In practice, once it's running you can power your TV on and off, suspend and resume the host, or unplug and replug the adapter without your remote going dead — recovery is automatic and typically takes about a second.
 
